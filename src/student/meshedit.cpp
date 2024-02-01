@@ -76,8 +76,55 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_face(Halfedge_Me
 */
 std::optional<Halfedge_Mesh::EdgeRef> Halfedge_Mesh::flip_edge(Halfedge_Mesh::EdgeRef e) {
 
-    (void)e;
-    return std::nullopt;
+    HalfedgeRef cur_he = e->halfedge();
+    HalfedgeRef twin_he = cur_he->twin();
+
+    // change current halfedge
+    HalfedgeRef old_next = cur_he->next();
+    cur_he->next() = cur_he->next()->next();
+    if (cur_he->vertex()->halfedge() == cur_he) {
+        cur_he->vertex()->halfedge() = twin_he->next();
+    }
+    cur_he->vertex() = twin_he->next()->next()->vertex();
+    
+    // change twin halfedge
+    HalfedgeRef old_twin_next = twin_he->next();
+    twin_he->next() = twin_he->next()->next();
+    if (twin_he->vertex()->halfedge() == twin_he) {
+        twin_he->vertex()->halfedge() = old_next;
+    }
+    twin_he->vertex() = old_next->next()->vertex();
+
+    // change original next halfedge
+    if (old_next->face()->halfedge() == old_next) {
+        old_next->face()->halfedge() = old_next->next();
+    }
+    old_next->face() = twin_he->face();
+    old_next->next() = twin_he;
+
+    // chnage original before halfedge
+    HalfedgeRef before = cur_he;
+    do {
+        before = before->next();
+    } while (before->next() != cur_he);
+    before->next() = old_twin_next;
+
+    // change original twin's next halfedge
+    if (old_twin_next->face()->halfedge() == old_twin_next) {
+        old_twin_next->face()->halfedge() = old_twin_next->next();
+    }
+    old_twin_next->face() = cur_he->face();
+    old_twin_next->next() = cur_he;
+
+    // change original twin's before halfedge
+    before = twin_he;
+    do {
+        before = before->next();
+    } while (before->next() != twin_he);
+    before->next() = old_next;
+
+    // TODO: when to return null?
+    return e;
 }
 
 /*

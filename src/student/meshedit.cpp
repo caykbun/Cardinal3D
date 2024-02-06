@@ -393,8 +393,41 @@ void Halfedge_Mesh::bevel_face_positions(const std::vector<Vec3>& start_position
     Splits all non-triangular faces into triangles.
 */
 void Halfedge_Mesh::triangulate() {
+    for (FaceRef face = faces_begin(); face != faces_end(); face++) {
+        HalfedgeRef prev_out = face->halfedge();
+        VertexRef origin = prev_out->vertex();
+    
+        while (prev_out->next()->next()->next() != face->halfedge()) {
+            // Make new elements and wire up
+            HalfedgeRef back = new_halfedge();
+            HalfedgeRef out = new_halfedge();
+            EdgeRef e = new_edge();
+            FaceRef f = new_face();
+            back->edge() = e;
+            back->face() = f;
+            back->next() = prev_out;
+            back->twin() = out;
+            back->vertex() = prev_out->next()->next()->vertex();
+            out->edge() = e;
+            out->next() = prev_out->next()->next();
+            out->twin() = back;
+            out->vertex() = origin;
+            e->halfedge() = back;
+            f->halfedge() = back;
 
-    // For each face...
+            // Connect with existing edges
+            prev_out->face() = f;
+            prev_out->next()->next() = back;
+            prev_out->next()->face() = f;
+
+            prev_out = out;
+        }
+
+        // handle the last trianlge
+        prev_out->next()->next()->next() = prev_out;
+        prev_out->face() = face;
+        face->halfedge() = prev_out;
+    }
 }
 
 /* Note on the quad subdivision process:

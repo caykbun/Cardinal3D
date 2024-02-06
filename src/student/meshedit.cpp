@@ -56,8 +56,81 @@ std::optional<Halfedge_Mesh::FaceRef> Halfedge_Mesh::erase_edge(Halfedge_Mesh::E
 */
 std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Mesh::EdgeRef e) {
 
-    (void)e;
-    return std::nullopt;
+    HalfedgeRef start = e->halfedge();
+
+    // the start and the end halfedges of the faces on the two sides of e
+    HalfedgeRef side_starts[2] = {start, start->twin()};
+    HalfedgeRef side_lasts[2];
+
+    for (int i = 0; i < 2; i++) {
+        HalfedgeRef start = side_starts[i];
+        HalfedgeRef last = start;
+        int edges = 1;
+        while (last->next() != start) {
+            edges++;
+            last = last->next();
+        }
+
+        // Reduce to the polygon case this face is a triangle
+        if (edges == 3) {
+            FaceRef face_to_erase = start->face();
+            start->face() = last->twin()->face();
+
+            start->next()->next() = last->twin()->next();  
+            start->next()->face() = last->twin()->face();
+            
+            HalfedgeRef last_from_twin = last->twin();
+            while (last_from_twin->next() != last->twin()) {
+                last_from_twin = last_from_twin->next();
+            }
+            last_from_twin->next() = start;
+
+            // erase face
+            erase(face_to_erase);
+
+            // erase edge
+            last->vertex()->halfedge() = last->twin()->next();
+            last->twin()->vertex()->halfedge() = start;
+            last->twin()->face()->halfedge() = last->twin()->next();
+            erase(last->edge());
+            erase(last->twin());
+            erase(last);
+
+            // record the last halfedge of the resulting polygon
+            side_lasts[i] = last_from_twin;
+        } else {
+            side_lasts[i] = last;
+        }
+    }
+
+    // collapsing edge
+    // attach halfedges on vertex_delete to vertex_keep
+    HalfedgeRef cur = start->twin()->next();
+    while (cur != start) {
+        cur->vertex() = side_starts[1]->vertex();
+        cur = cur->twin()->next();
+    }
+
+    // rewire halfedges for the two faces 
+    side_lasts[0]->next() = side_starts[0]->next();
+    side_lasts[1]->next() = side_starts[1]->next();
+
+    // update halfedge references of the elements affected by the erasion of the edge
+    side_starts[0]->face()->halfedge() = side_starts[0]->next();
+    side_starts[1]->face()->halfedge() = side_starts[1]->next();
+    side_starts[1]->vertex()->halfedge() = side_starts[0]->next();
+
+    // recompute vertex_keep's position
+    side_starts[1]->vertex()->pos = (side_starts[1]->vertex()->center() + side_starts[0]->vertex()->center()) / 2.f;
+    VertexRef vertex_keep = side_starts[1]->vertex(); 
+    
+    // erase edge and vertex_delete
+    erase(side_starts[0]->edge());
+    erase(side_starts[0]->vertex());
+    erase(side_starts[0]);
+    erase(side_starts[1]);
+    
+    return vertex_keep;
 }
 
 /*

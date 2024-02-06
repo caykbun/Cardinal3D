@@ -62,25 +62,25 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
     HalfedgeRef side_starts[2] = {start, start->twin()};
     HalfedgeRef side_lasts[2];
 
-    for (int i = 0; i < 2; i++) {
+    for(int i = 0; i < 2; i++) {
         HalfedgeRef start = side_starts[i];
         HalfedgeRef last = start;
         int edges = 1;
-        while (last->next() != start) {
+        while(last->next() != start) {
             edges++;
             last = last->next();
         }
 
         // Reduce to the polygon case this face is a triangle
-        if (edges == 3) {
+        if(edges == 3) {
             FaceRef face_to_erase = start->face();
             start->face() = last->twin()->face();
 
-            start->next()->next() = last->twin()->next();  
+            start->next()->next() = last->twin()->next();
             start->next()->face() = last->twin()->face();
-            
+
             HalfedgeRef last_from_twin = last->twin();
-            while (last_from_twin->next() != last->twin()) {
+            while(last_from_twin->next() != last->twin()) {
                 last_from_twin = last_from_twin->next();
             }
             last_from_twin->next() = start;
@@ -106,12 +106,12 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
     // collapsing edge
     // attach halfedges on vertex_delete to vertex_keep
     HalfedgeRef cur = start->twin()->next();
-    while (cur != start) {
+    while(cur != start) {
         cur->vertex() = side_starts[1]->vertex();
         cur = cur->twin()->next();
     }
 
-    // rewire halfedges for the two faces 
+    // rewire halfedges for the two faces
     side_lasts[0]->next() = side_starts[0]->next();
     side_lasts[1]->next() = side_starts[1]->next();
 
@@ -121,15 +121,16 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
     side_starts[1]->vertex()->halfedge() = side_starts[0]->next();
 
     // recompute vertex_keep's position
-    side_starts[1]->vertex()->pos = (side_starts[1]->vertex()->center() + side_starts[0]->vertex()->center()) / 2.f;
-    VertexRef vertex_keep = side_starts[1]->vertex(); 
-    
+    side_starts[1]->vertex()->pos =
+        (side_starts[1]->vertex()->center() + side_starts[0]->vertex()->center()) / 2.f;
+    VertexRef vertex_keep = side_starts[1]->vertex();
+
     // erase edge and vertex_delete
     erase(side_starts[0]->edge());
     erase(side_starts[0]->vertex());
     erase(side_starts[0]);
     erase(side_starts[1]);
-    
+
     return vertex_keep;
 }
 
@@ -155,21 +156,21 @@ std::optional<Halfedge_Mesh::EdgeRef> Halfedge_Mesh::flip_edge(Halfedge_Mesh::Ed
     // change current halfedge
     HalfedgeRef old_next = cur_he->next();
     cur_he->next() = cur_he->next()->next();
-    if (cur_he->vertex()->halfedge() == cur_he) {
+    if(cur_he->vertex()->halfedge() == cur_he) {
         cur_he->vertex()->halfedge() = twin_he->next();
     }
     cur_he->vertex() = twin_he->next()->next()->vertex();
-    
+
     // change twin halfedge
     HalfedgeRef old_twin_next = twin_he->next();
     twin_he->next() = twin_he->next()->next();
-    if (twin_he->vertex()->halfedge() == twin_he) {
+    if(twin_he->vertex()->halfedge() == twin_he) {
         twin_he->vertex()->halfedge() = old_next;
     }
     twin_he->vertex() = old_next->next()->vertex();
 
     // change original next halfedge
-    if (old_next->face()->halfedge() == old_next) {
+    if(old_next->face()->halfedge() == old_next) {
         old_next->face()->halfedge() = old_next->next();
     }
     old_next->face() = twin_he->face();
@@ -179,11 +180,11 @@ std::optional<Halfedge_Mesh::EdgeRef> Halfedge_Mesh::flip_edge(Halfedge_Mesh::Ed
     HalfedgeRef before = cur_he;
     do {
         before = before->next();
-    } while (before->next() != cur_he);
+    } while(before->next() != cur_he);
     before->next() = old_twin_next;
 
     // change original twin's next halfedge
-    if (old_twin_next->face()->halfedge() == old_twin_next) {
+    if(old_twin_next->face()->halfedge() == old_twin_next) {
         old_twin_next->face()->halfedge() = old_twin_next->next();
     }
     old_twin_next->face() = cur_he->face();
@@ -193,7 +194,7 @@ std::optional<Halfedge_Mesh::EdgeRef> Halfedge_Mesh::flip_edge(Halfedge_Mesh::Ed
     before = twin_he;
     do {
         before = before->next();
-    } while (before->next() != twin_he);
+    } while(before->next() != twin_he);
     before->next() = old_next;
 
     // TODO: when to return null?
@@ -393,11 +394,11 @@ void Halfedge_Mesh::bevel_face_positions(const std::vector<Vec3>& start_position
     Splits all non-triangular faces into triangles.
 */
 void Halfedge_Mesh::triangulate() {
-    for (FaceRef face = faces_begin(); face != faces_end(); face++) {
+    for(FaceRef face = faces_begin(); face != faces_end(); face++) {
         HalfedgeRef prev_out = face->halfedge();
         VertexRef origin = prev_out->vertex();
-    
-        while (prev_out->next()->next()->next() != face->halfedge()) {
+
+        while(prev_out->next()->next()->next() != face->halfedge()) {
             // Make new elements and wire up
             HalfedgeRef back = new_halfedge();
             HalfedgeRef out = new_halfedge();
@@ -490,20 +491,20 @@ void Halfedge_Mesh::linear_subdivide_positions() {
 
     // For each vertex, assign Vertex::new_pos to
     // its original position, Vertex::pos.
-    for (VertexRef v = vertices_begin(); v != vertices_end(); v++) {
+    for(VertexRef v = vertices_begin(); v != vertices_end(); v++) {
         v->new_pos = v->pos;
     }
 
     // For each edge, assign the midpoint of the two original
     // positions to Edge::new_pos.
-    for (EdgeRef e = edges_begin(); e != edges_end(); e++) {
+    for(EdgeRef e = edges_begin(); e != edges_end(); e++) {
         e->new_pos = (e->halfedge()->vertex()->pos + e->halfedge()->twin()->vertex()->pos) / 2.f;
     }
 
     // For each face, assign the centroid (i.e., arithmetic mean)
     // of the original vertex positions to Face::new_pos. Note
     // that in general, NOT all faces will be triangles!
-    for (FaceRef f = faces_begin(); f != faces_end(); f++) {
+    for(FaceRef f = faces_begin(); f != faces_end(); f++) {
         HalfedgeRef cur = f->halfedge();
         int num_edges = 0;
         f->new_pos = {};
@@ -511,7 +512,7 @@ void Halfedge_Mesh::linear_subdivide_positions() {
             num_edges++;
             f->new_pos += cur->vertex()->pos;
             cur = cur->next();
-        } while (cur != f->halfedge());
+        } while(cur != f->halfedge());
         f->new_pos /= num_edges * 1.f;
     }
 }

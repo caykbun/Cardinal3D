@@ -210,7 +210,121 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::split_edge(Halfedge_Mesh:
 
     // Check if the edge is on the boundary
     if(e->on_boundary()) {
-        return std::nullopt; // TODO: change this
+        /*
+               c          c
+             / |        / |
+            a  |  -->  a--m
+             \ |        \ |
+               b          b
+        */
+        HalfedgeRef bc = e->halfedge();
+        if(bc->is_boundary()) {
+            bc = bc->twin(); // make sure bc is not a boundary halfedge
+        }
+        HalfedgeRef ca = bc->next();
+        HalfedgeRef ab = ca->next();
+        HalfedgeRef cb = bc->twin();
+
+        // only work for triangle mesh
+        if(ab->next() != bc) {
+            return std::nullopt;
+        }
+
+        // create new halfedges
+        HalfedgeRef mc = new_halfedge();
+        HalfedgeRef cm = new_halfedge();
+        HalfedgeRef mb = new_halfedge();
+        HalfedgeRef bm = new_halfedge();
+        HalfedgeRef ma = new_halfedge();
+        HalfedgeRef am = new_halfedge();
+
+        // create new vertices
+        VertexRef m = new_vertex();
+        m->pos = (bc->vertex()->pos + cb->vertex()->pos) / 2.f;
+
+        // create new edges
+        EdgeRef top_edge = new_edge();
+        EdgeRef bottom_edge = new_edge();
+        EdgeRef middle_edge = new_edge();
+
+        // create new faces
+        FaceRef top_face = new_face();
+        FaceRef bottom_face = new_face();
+
+        // rewire halfedges
+        mc->vertex() = m;
+        mc->edge() = top_edge;
+        mc->face() = top_face;
+        mc->next() = ca;
+        mc->twin() = cm;
+
+        cm->vertex() = ca->vertex();
+        cm->edge() = top_edge;
+        cm->face() = cb->face();
+        cm->next() = mb;
+        cm->twin() = mc;
+
+        mb->vertex() = m;
+        mb->edge() = bottom_edge;
+        mb->face() = cb->face();
+        mb->next() = cb->next();
+        mb->twin() = bm;
+
+        bm->vertex() = bc->vertex();
+        bm->edge() = bottom_edge;
+        bm->face() = bottom_face;
+        bm->next() = ma;
+        bm->twin() = mb;
+
+        ma->vertex() = m;
+        ma->edge() = middle_edge;
+        ma->face() = bottom_face;
+        ma->next() = ab;
+        ma->twin() = am;
+
+        am->vertex() = ab->vertex();
+        am->edge() = middle_edge;
+        am->face() = top_face;
+        am->next() = mc;
+        am->twin() = ma;
+
+        ca->face() = top_face;
+        ca->next() = am;
+
+        ab->face() = bottom_face;
+        ab->next() = bm;
+
+        // find the previous halfedge of cb
+        unsigned int boundary_face_degree = cb->face()->degree();
+        HalfedgeRef prev = cb;
+        for(unsigned int i = 0; i < boundary_face_degree - 1; i++) {
+            prev = prev->next();
+        }
+        prev->next() = cm;
+
+        // rewire vertices
+        m->halfedge() = mc;
+        ca->vertex()->halfedge() = ca;
+        ab->twin()->vertex()->halfedge() = ab->twin();
+
+        // rewire edges
+        top_edge->halfedge() = mc;
+        bottom_edge->halfedge() = bm;
+        middle_edge->halfedge() = ma;
+
+        // rewire faces
+        top_face->halfedge() = mc;
+        bottom_face->halfedge() = ma;
+        cb->face()->halfedge() = cm;
+
+        // remove old halfedges, edges and faces
+        FaceRef old_face = bc->face();
+        erase(bc);
+        erase(cb);
+        erase(e);
+        erase(old_face);
+
+        return m;
     } else {
         /*
                c             c
@@ -321,9 +435,7 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::split_edge(Halfedge_Mesh:
         // rewire vertices
         m->halfedge() = mc;
         ca->vertex()->halfedge() = cm;
-        // ab->vertex()->halfedge() = am;
         bd->vertex()->halfedge() = bm;
-        // dc->vertex()->halfedge() = dm;
 
         // rewire edges
         top_edge->halfedge() = mc;
@@ -340,7 +452,6 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::split_edge(Halfedge_Mesh:
         // remove old halfedges, edges and faces
         FaceRef old_left_face = bc->face();
         FaceRef old_right_face = cb->face();
-
         erase(bc);
         erase(cb);
         erase(e);

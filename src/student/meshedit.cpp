@@ -499,8 +499,78 @@ std::optional<Halfedge_Mesh::FaceRef> Halfedge_Mesh::bevel_vertex(Halfedge_Mesh:
     // Reminder: You should set the positions of new vertices (v->pos) to be exactly
     // the same as wherever they "started from."
 
-    (void)v;
-    return std::nullopt;
+    unsigned int edge_degree = v->degree();
+    if(v->on_boundary()) {
+        edge_degree++; // only one face can be boundary face for manifolds
+    }
+
+    // get all halfedges started from v
+    std::vector<HalfedgeRef> hes;
+    HalfedgeRef cur = v->halfedge()->twin()->next();
+    for(unsigned int i = 0; i < edge_degree; i++) {
+        hes.push_back(cur);
+        cur = cur->twin()->next();
+    }
+    std::reverse(hes.begin(), hes.end()); // reverse the order of halfedges
+
+    // create new halfedges
+    std::vector<HalfedgeRef> new_hes_in;
+    std::vector<HalfedgeRef> new_hes_out;
+    for(unsigned int i = 0; i < edge_degree; i++) {
+        new_hes_in.push_back(new_halfedge());
+        new_hes_out.push_back(new_halfedge());
+    }
+
+    // create new vertices
+    std::vector<VertexRef> new_vs;
+    new_vs.push_back(v);
+    for(unsigned int i = 1; i < edge_degree; i++) {
+        VertexRef new_v = new_vertex();
+        new_v->pos = v->pos;
+        new_vs.push_back(new_v);
+    }
+
+    // create new edges
+    std::vector<EdgeRef> new_es;
+    for(unsigned int i = 0; i < edge_degree; i++) {
+        new_es.push_back(new_edge());
+    }
+
+    // create new face
+    FaceRef new_f = new_face();
+
+    // rewire halfedges
+    for(unsigned int i = 0; i < edge_degree; i++) {
+        new_hes_in[i]->vertex() = new_vs[i];
+        new_hes_in[i]->edge() = new_es[i];
+        new_hes_in[i]->face() = new_f;
+        new_hes_in[i]->next() = new_hes_in[(i + 1) % edge_degree];
+        new_hes_in[i]->twin() = new_hes_out[i];
+
+        new_hes_out[i]->vertex() = new_vs[(i + 1) % edge_degree];
+        new_hes_out[i]->edge() = new_es[i];
+        new_hes_out[i]->face() = hes[i]->face();
+        new_hes_out[i]->next() = hes[i];
+        new_hes_out[i]->twin() = new_hes_in[i];
+
+        hes[i]->vertex() = new_vs[i];
+        hes[i]->twin()->next() = new_hes_out[(i - 1 + edge_degree) % edge_degree];
+    }
+
+    // rewire vertices
+    for(unsigned int i = 0; i < edge_degree; i++) {
+        new_vs[i]->halfedge() = new_hes_in[i];
+    }
+
+    // rewire edges
+    for(unsigned int i = 0; i < edge_degree; i++) {
+        new_es[i]->halfedge() = new_hes_in[i];
+    }
+
+    // rewire face
+    new_f->halfedge() = new_hes_in[0];
+
+    return new_f;
 }
 
 /*
@@ -558,10 +628,16 @@ void Halfedge_Mesh::bevel_vertex_positions(const std::vector<Vec3>& start_positi
         h = h->next();
     } while(h != face->halfedge());
 
-    (void)new_halfedges;
-    (void)start_positions;
-    (void)face;
-    (void)tangent_offset;
+    // scale and clamp the tangent offset
+    tangent_offset *= -1.f;
+    tangent_offset = std::max(0.01f, std::min(0.99f, tangent_offset));
+
+    for(size_t i = 0; i < new_halfedges.size(); i++) {
+        Vec3 start = start_positions[i];
+        Vec3 end = new_halfedges[i]->twin()->next()->twin()->vertex()->pos;
+        VertexRef v = new_halfedges[i]->vertex();
+        v->pos = start + tangent_offset * (end - start);
+    }
 }
 
 /*

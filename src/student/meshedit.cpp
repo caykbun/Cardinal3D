@@ -208,8 +208,147 @@ std::optional<Halfedge_Mesh::EdgeRef> Halfedge_Mesh::flip_edge(Halfedge_Mesh::Ed
 */
 std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::split_edge(Halfedge_Mesh::EdgeRef e) {
 
-    (void)e;
-    return std::nullopt;
+    // Check if the edge is on the boundary
+    if(e->on_boundary()) {
+        return std::nullopt; // TODO: change this
+    } else {
+        /*
+               c             c
+             / | \         / | \
+            a  |  d  -->  a--m--d
+             \ | /         \ | /
+               b             b
+        */
+        HalfedgeRef bc = e->halfedge();
+        HalfedgeRef ca = bc->next();
+        HalfedgeRef ab = ca->next();
+        HalfedgeRef cb = bc->twin();
+        HalfedgeRef bd = cb->next();
+        HalfedgeRef dc = bd->next();
+
+        // only work for triangle mesh
+        if(ab->next() != bc || dc->next() != cb) {
+            return std::nullopt;
+        }
+
+        // create new halfedges
+        HalfedgeRef mc = new_halfedge();
+        HalfedgeRef cm = new_halfedge();
+        HalfedgeRef md = new_halfedge();
+        HalfedgeRef dm = new_halfedge();
+        HalfedgeRef mb = new_halfedge();
+        HalfedgeRef bm = new_halfedge();
+        HalfedgeRef ma = new_halfedge();
+        HalfedgeRef am = new_halfedge();
+
+        // create new vertices
+        VertexRef m = new_vertex();
+        m->pos = (bc->vertex()->pos + cb->vertex()->pos) / 2.f;
+
+        // create new edges
+        EdgeRef top_edge = new_edge();
+        EdgeRef bottom_edge = new_edge();
+        EdgeRef left_edge = new_edge();
+        EdgeRef right_edge = new_edge();
+
+        // create new faces
+        FaceRef top_left_face = new_face();
+        FaceRef top_right_face = new_face();
+        FaceRef bottom_left_face = new_face();
+        FaceRef bottom_right_face = new_face();
+
+        // rewire halfedges
+        mc->vertex() = m;
+        mc->edge() = top_edge;
+        mc->face() = top_left_face;
+        mc->next() = ca;
+        mc->twin() = cm;
+
+        cm->vertex() = ca->vertex();
+        cm->edge() = top_edge;
+        cm->face() = top_right_face;
+        cm->next() = md;
+        cm->twin() = mc;
+
+        md->vertex() = m;
+        md->edge() = right_edge;
+        md->face() = top_right_face;
+        md->next() = dc;
+        md->twin() = dm;
+
+        dm->vertex() = dc->vertex();
+        dm->edge() = right_edge;
+        dm->face() = bottom_right_face;
+        dm->next() = mb;
+        dm->twin() = md;
+
+        mb->vertex() = m;
+        mb->edge() = bottom_edge;
+        mb->face() = bottom_right_face;
+        mb->next() = bd;
+        mb->twin() = bm;
+
+        bm->vertex() = bd->vertex();
+        bm->edge() = bottom_edge;
+        bm->face() = bottom_left_face;
+        bm->next() = ma;
+        bm->twin() = mb;
+
+        ma->vertex() = m;
+        ma->edge() = left_edge;
+        ma->face() = bottom_left_face;
+        ma->next() = ab;
+        ma->twin() = am;
+
+        am->vertex() = ab->vertex();
+        am->edge() = left_edge;
+        am->face() = top_left_face;
+        am->next() = mc;
+        am->twin() = ma;
+
+        ca->face() = top_left_face;
+        ca->next() = am;
+
+        ab->face() = bottom_left_face;
+        ab->next() = bm;
+
+        bd->face() = bottom_right_face;
+        bd->next() = dm;
+
+        dc->face() = top_right_face;
+        dc->next() = cm;
+
+        // rewire vertices
+        m->halfedge() = mc;
+        ca->vertex()->halfedge() = cm;
+        // ab->vertex()->halfedge() = am;
+        bd->vertex()->halfedge() = bm;
+        // dc->vertex()->halfedge() = dm;
+
+        // rewire edges
+        top_edge->halfedge() = mc;
+        bottom_edge->halfedge() = mb;
+        left_edge->halfedge() = ma;
+        right_edge->halfedge() = md;
+
+        // rewire faces
+        top_left_face->halfedge() = mc;
+        top_right_face->halfedge() = md;
+        bottom_left_face->halfedge() = ma;
+        bottom_right_face->halfedge() = mb;
+
+        // remove old halfedges, edges and faces
+        FaceRef old_left_face = bc->face();
+        FaceRef old_right_face = cb->face();
+
+        erase(bc);
+        erase(cb);
+        erase(e);
+        erase(old_left_face);
+        erase(old_right_face);
+
+        return m;
+    }
 }
 
 /* Note on the beveling process:
@@ -424,7 +563,7 @@ void Halfedge_Mesh::triangulate() {
             prev_out = out;
         }
 
-        // handle the last trianlge
+        // handle the last triangle
         prev_out->next()->next()->next() = prev_out;
         prev_out->face() = face;
         face->halfedge() = prev_out;

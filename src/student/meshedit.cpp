@@ -604,8 +604,98 @@ std::optional<Halfedge_Mesh::FaceRef> Halfedge_Mesh::bevel_face(Halfedge_Mesh::F
     // Reminder: You should set the positions of new vertices (v->pos) to be exactly
     // the same as wherever they "started from."
 
-    (void)f;
-    return std::nullopt;
+    unsigned int face_degree = f->degree();
+
+    // get all halfedges of the face
+    std::vector<HalfedgeRef> hes;
+    HalfedgeRef cur = f->halfedge();
+    for(unsigned int i = 0; i < face_degree; i++) {
+        hes.push_back(cur);
+        cur = cur->next();
+    }
+
+    // create new halfedges
+    std::vector<HalfedgeRef> hes_up;
+    std::vector<HalfedgeRef> hes_down;
+    std::vector<HalfedgeRef> hes_in;
+    std::vector<HalfedgeRef> hes_out;
+    for(unsigned int i = 0; i < face_degree; i++) {
+        hes_up.push_back(new_halfedge());
+        hes_down.push_back(new_halfedge());
+        hes_in.push_back(new_halfedge());
+        hes_out.push_back(new_halfedge());
+    }
+
+    // create new vertices
+    std::vector<VertexRef> new_vs;
+    for(unsigned int i = 0; i < face_degree; i++) {
+        VertexRef new_v = new_vertex();
+        new_v->pos = hes[i]->vertex()->pos;
+        new_vs.push_back(new_v);
+    }
+
+    // create new edges
+    std::vector<EdgeRef> es_ud;
+    std::vector<EdgeRef> es_io;
+    for(unsigned int i = 0; i < face_degree; i++) {
+        es_ud.push_back(new_edge());
+        es_io.push_back(new_edge());
+    }
+
+    // create new faces
+    std::vector<FaceRef> new_fs;
+    for(unsigned int i = 0; i < face_degree; i++) {
+        new_fs.push_back(new_face());
+    }
+
+    // rewire halfedges
+    for(unsigned int i = 0; i < face_degree; i++) {
+        hes[i]->face() = new_fs[i];
+        hes[i]->next() = hes_up[(i + 1) % face_degree];
+
+        hes_up[i]->vertex() = hes[i]->vertex();
+        hes_up[i]->edge() = es_ud[i];
+        hes_up[i]->face() = new_fs[(i - 1 + face_degree) % face_degree];
+        hes_up[i]->next() = hes_out[(i - 1 + face_degree) % face_degree];
+        hes_up[i]->twin() = hes_down[i];
+
+        hes_down[i]->vertex() = new_vs[i];
+        hes_down[i]->edge() = es_ud[i];
+        hes_down[i]->face() = new_fs[i];
+        hes_down[i]->next() = hes[i];
+        hes_down[i]->twin() = hes_up[i];
+
+        hes_in[i]->vertex() = new_vs[i];
+        hes_in[i]->edge() = es_io[i];
+        hes_in[i]->face() = f;
+        hes_in[i]->next() = hes_in[(i + 1) % face_degree];
+        hes_in[i]->twin() = hes_out[i];
+
+        hes_out[i]->vertex() = new_vs[(i + 1) % face_degree];
+        hes_out[i]->edge() = es_io[i];
+        hes_out[i]->face() = new_fs[i];
+        hes_out[i]->next() = hes_down[i];
+        hes_out[i]->twin() = hes_in[i];
+    }
+
+    // rewire vertices
+    for(unsigned int i = 0; i < face_degree; i++) {
+        new_vs[i]->halfedge() = hes_in[i];
+    }
+
+    // rewire edges
+    for(unsigned int i = 0; i < face_degree; i++) {
+        es_ud[i]->halfedge() = hes_up[i];
+        es_io[i]->halfedge() = hes_in[i];
+    }
+
+    // rewire faces
+    f->halfedge() = hes_in[0];
+    for(unsigned int i = 0; i < face_degree; i++) {
+        new_fs[i]->halfedge() = hes_out[i];
+    }
+
+    return f;
 }
 
 /*
@@ -629,8 +719,8 @@ void Halfedge_Mesh::bevel_vertex_positions(const std::vector<Vec3>& start_positi
     } while(h != face->halfedge());
 
     // scale and clamp the tangent offset
-    tangent_offset *= -1.f;
-    tangent_offset = std::max(0.01f, std::min(0.99f, tangent_offset));
+    tangent_offset = -tangent_offset;
+    tangent_offset = std::max(0.05f, std::min(0.95f, tangent_offset));
 
     for(size_t i = 0; i < new_halfedges.size(); i++) {
         Vec3 start = start_positions[i];
@@ -709,11 +799,24 @@ void Halfedge_Mesh::bevel_face_positions(const std::vector<Vec3>& start_position
         h = h->next();
     } while(h != face->halfedge());
 
-    (void)new_halfedges;
-    (void)start_positions;
-    (void)face;
-    (void)tangent_offset;
-    (void)normal_offset;
+    Vec3 normal = face->normal();
+
+    // Compute center of the face
+    Vec3 center = Vec3(0, 0, 0);
+    for(size_t i = 0; i < new_halfedges.size(); i++) {
+        center += start_positions[i];
+    }
+    center /= new_halfedges.size();
+
+    // scale and clamp offsets
+    normal_offset = -normal_offset;
+    tangent_offset = std::max(-0.95f, tangent_offset);
+
+    for(size_t i = 0; i < new_halfedges.size(); i++) {
+        Vec3 start = start_positions[i];
+        VertexRef v = new_halfedges[i]->vertex();
+        v->pos = start + tangent_offset * (start - center) + normal_offset * normal;
+    }
 }
 
 /*

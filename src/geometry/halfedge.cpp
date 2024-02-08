@@ -126,6 +126,16 @@ unsigned int Halfedge_Mesh::Vertex::degree() const {
     return d;
 }
 
+unsigned int Halfedge_Mesh::Vertex::degree_with_boundary() const {
+    unsigned int d = 0;
+    HalfedgeCRef h = _halfedge;
+    do {
+        d++;
+        h = h->twin()->next();
+    } while(h != _halfedge);
+    return d;
+}
+
 unsigned int Halfedge_Mesh::Face::degree() const {
     unsigned int d = 0;
     HalfedgeCRef h = _halfedge;

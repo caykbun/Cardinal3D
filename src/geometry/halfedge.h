@@ -350,6 +350,9 @@ public:
             return _id;
         }
 
+        
+        unsigned int degree_with_boundary() const;
+
         // The vertex position
         Vec3 pos;
 

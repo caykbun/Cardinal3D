@@ -152,6 +152,28 @@ std::optional<Halfedge_Mesh::EdgeRef> Halfedge_Mesh::flip_edge(Halfedge_Mesh::Ed
     HalfedgeRef cur_he = e->halfedge();
     HalfedgeRef twin_he = cur_he->twin();
 
+    // handle boundary
+    if (cur_he->is_boundary() || twin_he->is_boundary()) {
+        return std::nullopt;
+    }
+
+    // handle detched edge (flipping from a vertex that only have two edges)
+    if (cur_he->vertex()->degree_with_boundary() <= 2 || cur_he->next()->vertex()->degree_with_boundary() <= 2) {
+        // printf("detached edge\n");
+        return std::nullopt;
+    }
+
+    // handle degenrated surface
+    HalfedgeRef check = cur_he->next()->next();
+    do {
+        if (check->next()->vertex() == twin_he->next()->next()->vertex()) {
+            // already have an edge at target position
+            // printf("degenerated surface\n");
+            return std::nullopt;
+        }
+        check = check->twin()->next();
+    } while (check != cur_he->next()->next());
+
     // change current halfedge
     HalfedgeRef old_next = cur_he->next();
     cur_he->next() = cur_he->next()->next();
@@ -196,7 +218,6 @@ std::optional<Halfedge_Mesh::EdgeRef> Halfedge_Mesh::flip_edge(Halfedge_Mesh::Ed
     } while (before->next() != twin_he);
     before->next() = old_next;
 
-    // TODO: when to return null?
     return e;
 }
 

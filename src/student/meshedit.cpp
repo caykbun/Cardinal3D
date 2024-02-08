@@ -965,10 +965,59 @@ void Halfedge_Mesh::catmullclark_subdivide_positions() {
     // rules. (These rules are outlined in the Developer Manual.)
 
     // Faces
+    for(FaceRef f = faces_begin(); f != faces_end(); f++) {
+        f->new_pos = {};
+        
+        int n = f->degree();
+        
+        HalfedgeRef cur = f->halfedge();
+        do {
+            f->new_pos += cur->vertex()->pos;
+            cur = cur->next();
+        } while(cur != f->halfedge());
+        f->new_pos /= n * 1.f;
+    }
 
     // Edges
+    for(EdgeRef e = edges_begin(); e != edges_end(); e++) {
+        e->new_pos = {};
+
+        // two endpoints
+        e->new_pos += e->halfedge()->vertex()->pos;
+        e->new_pos += e->halfedge()->twin()->vertex()->pos;
+
+        // two face centroids
+        e->new_pos += e->halfedge()->face()->new_pos;
+        e->new_pos += e->halfedge()->twin()->face()->new_pos;
+
+        e->new_pos /= 4.f;
+    }
 
     // Vertices
+    for(VertexRef v = vertices_begin(); v != vertices_end(); v++) {
+        int n = v->degree();
+
+        // average of face centroids
+        HalfedgeRef cur = v->halfedge();
+        Vec3 q = {};
+        do {
+            q += cur->face()->new_pos;
+            cur = cur->twin()->next();
+        } while(cur != v->halfedge());
+        q /= n * 1.f;
+
+        // average of edge midpoints
+        Vec3 r = {};
+        do {
+            Vec3 mid = (cur->vertex()->pos + cur->twin()->vertex()->pos) / 2.f;
+            r += mid;
+            cur = cur->twin()->next();
+        } while(cur != v->halfedge());
+        r /= n * 1.f;
+
+        // original position
+        v->new_pos = (q + 2.f * r + (n - 3) * 1.f * v->pos) / (n * 1.f);
+    }
 }
 
 /*

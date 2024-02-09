@@ -55,58 +55,98 @@ std::optional<Halfedge_Mesh::FaceRef> Halfedge_Mesh::erase_edge(Halfedge_Mesh::E
     the new vertex created by the collapse.
 */
 std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Mesh::EdgeRef e) {
-
-    HalfedgeRef start = e->halfedge();
-
+    // Collect Elemments
     // the start and the end halfedges of the faces on the two sides of e
-    HalfedgeRef side_starts[2] = {start, start->twin()};
+    HalfedgeRef side_starts[2] = {e->halfedge(), e->halfedge()->twin()};
     HalfedgeRef side_lasts[2];
+    int side_degrees[2];
 
     for (int i = 0; i < 2; i++) {
         HalfedgeRef start = side_starts[i];
         HalfedgeRef last = start;
-        int edges = 1;
+        int d = 1;
         while (last->next() != start) {
-            edges++;
+            d++;
             last = last->next();
         }
+        side_lasts[i] = last;
+        side_degrees[i] = d;
+    }
 
+    // Prevent queries that make the mesh non-manifold
+    if (side_starts[0]->is_boundary() || side_starts[1]->is_boundary()) {
+        // if on the boundary, edge belongs to a triangle, and no other faces are adjacent to the trianlge, becomes non-manifold
+        int inside = side_starts[0]->is_boundary() ? 1 : 0;
+        if (side_degrees[inside] == 3 
+        && side_starts[inside]->next()->twin()->is_boundary() 
+        && side_lasts[inside]->twin()->is_boundary()) {
+            // printf("non-manifold case 1\n");
+            return std::nullopt;
+        }
+    } else {
+        // if not on the boundary, but back to back triangles, becomes non-manifold.
+        for (int i = 0; i < 2; i++) {
+            if (side_degrees[i] == 3 && side_lasts[i]->twin()->next()->edge() == side_starts[i]->next()->edge()) {
+                // printf("non-manifold case 3\n");
+                return std::nullopt;
+            }
+        }
+
+        // If oth vertices of the collapsing edge are connecting to a boundary edge, becomes non-manifold
+        int side_contians_boundary = 0;
+        for (int i = 0; i < 2; i++) {
+            // walk around v and check if any of them is a boundary
+            HalfedgeRef cur = side_starts[i];
+            do {
+                if (cur->is_boundary()) {
+                    // collapse will yield non-manifold, abort
+                    side_contians_boundary++;
+                    break;
+                }
+                cur = cur->twin()->next();
+            } while (cur != side_starts[i]);
+        }
+        if (side_contians_boundary == 2) {
+            // printf("non-manifold case 2\n");
+            return std::nullopt;
+        }
+    }
+
+    for (int i = 0; i < 2; i++) {
         // Reduce to the polygon case this face is a triangle
-        if (edges == 3) {
-            FaceRef face_to_erase = start->face();
-            start->face() = last->twin()->face();
+        if (side_degrees[i] == 3) {
+            FaceRef face_to_erase = side_starts[i]->face();
+            side_starts[i]->face() = side_lasts[i]->twin()->face();
 
-            start->next()->next() = last->twin()->next();  
-            start->next()->face() = last->twin()->face();
+            side_starts[i]->next()->next() = side_lasts[i]->twin()->next();  
+            side_starts[i]->next()->face() = side_lasts[i]->twin()->face();
             
-            HalfedgeRef last_from_twin = last->twin();
-            while (last_from_twin->next() != last->twin()) {
+            HalfedgeRef last_from_twin = side_lasts[i]->twin();
+            while (last_from_twin->next() != side_lasts[i]->twin()) {
                 last_from_twin = last_from_twin->next();
             }
-            last_from_twin->next() = start;
+            last_from_twin->next() = side_starts[i];
 
             // erase face
             erase(face_to_erase);
 
             // erase edge
-            last->vertex()->halfedge() = last->twin()->next();
-            last->twin()->vertex()->halfedge() = start;
-            last->twin()->face()->halfedge() = last->twin()->next();
-            erase(last->edge());
-            erase(last->twin());
-            erase(last);
+            side_lasts[i]->vertex()->halfedge() = side_lasts[i]->twin()->next();
+            side_lasts[i]->twin()->vertex()->halfedge() = side_starts[i];
+            side_lasts[i]->twin()->face()->halfedge() = side_lasts[i]->twin()->next();
+            erase(side_lasts[i]->edge());
+            erase(side_lasts[i]->twin());
+            erase(side_lasts[i]);
 
             // record the last halfedge of the resulting polygon
             side_lasts[i] = last_from_twin;
-        } else {
-            side_lasts[i] = last;
         }
     }
 
-    // collapsing edge
+    // Rewiring elements
     // attach halfedges on vertex_delete to vertex_keep
-    HalfedgeRef cur = start->twin()->next();
-    while (cur != start) {
+    HalfedgeRef cur = side_starts[1]->next();
+    while (cur != side_starts[0]) {
         cur->vertex() = side_starts[1]->vertex();
         cur = cur->twin()->next();
     }
@@ -124,7 +164,7 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
     side_starts[1]->vertex()->pos = (side_starts[1]->vertex()->center() + side_starts[0]->vertex()->center()) / 2.f;
     VertexRef vertex_keep = side_starts[1]->vertex(); 
     
-    // erase edge and vertex_delete
+    // Erase elements
     erase(side_starts[0]->edge());
     erase(side_starts[0]->vertex());
     erase(side_starts[0]);
@@ -142,6 +182,8 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_face(Halfedge_Me
     (void)f;
     return std::nullopt;
 }
+
+
 
 /*
     This method should flip the given edge and return an iterator to the

@@ -132,72 +132,6 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
     erase(side_starts[1]);
 
     return vertex_keep;
-
-    // HalfedgeRef cd = e->halfedge();
-    // HalfedgeRef dc = cd->twin();
-    // HalfedgeRef da = cd->next();
-    // HalfedgeRef ad = da->twin();
-    // HalfedgeRef ac = da->next();
-    // HalfedgeRef ca = ac->twin();
-    // HalfedgeRef cb = dc->next();
-    // HalfedgeRef bc = cb->twin();
-    // HalfedgeRef bd = cb->next();
-    // HalfedgeRef db = bd->twin();
-
-    // VertexRef a = ad->vertex();
-    // VertexRef b = bd->vertex();
-    // VertexRef c = cd->vertex();
-    // VertexRef d = dc->vertex();
-
-    // EdgeRef cd_edge = cd->edge();
-    // EdgeRef ac_edge = ac->edge();
-    // EdgeRef cb_edge = cb->edge();
-
-    // FaceRef top_f = cd->face();
-    // FaceRef bottom_f = dc->face();
-
-    // // change d's pos to the average of c and d
-    // d->pos = (c->pos + d->pos) / 2.f;
-
-    // // rewire halfedges
-    // HalfedgeRef cur_he = cd;
-    // do {
-    //     cur_he->vertex() = d;
-    //     cur_he = cur_he->twin()->next();
-    // } while(cur_he != cd);
-
-    // ad->twin() = ca;
-    // db->twin() = bc;
-
-    // ca->edge() = ad->edge();
-    // ca->twin() = ad;
-    // bc->edge() = db->edge();
-    // bc->twin() = db;
-
-    // // rewire vertices
-    // a->halfedge() = ad;
-    // b->halfedge() = db->next();
-    // d->halfedge() = ad->next();
-
-    // // rewire edges
-    // ad->edge()->halfedge() = ad;
-    // db->edge()->halfedge() = db;
-
-    // // remove old halfedges, vertex, edges and faces
-    // erase(cd);
-    // erase(dc);
-    // erase(da);
-    // erase(ac);
-    // erase(cb);
-    // erase(bd);
-    // erase(c);
-    // erase(cd_edge);
-    // erase(ac_edge);
-    // erase(cb_edge);
-    // erase(top_f);
-    // erase(bottom_f);
-
-    // return d;
 }
 
 /*
@@ -1336,7 +1270,6 @@ bool Halfedge_Mesh::simplify() {
         }
 
         for(VertexRef v = vertices_begin(); v != vertices_end(); v++) {
-            // initialize q as zero matrix
             Mat4 q = Mat4::Zero;
             HalfedgeRef cur = v->halfedge();
             do {
@@ -1353,23 +1286,7 @@ bool Halfedge_Mesh::simplify() {
 
         Edge_Record best_edge_record = edge_queue.top();
         edge_queue.pop();
-
         EdgeRef best_edge = best_edge_record.edge;
-        VertexRef v0 = best_edge->halfedge()->vertex();
-        VertexRef v1 = best_edge->halfedge()->twin()->vertex();
-        Mat4 new_q = vertex_quadrics[v0] + vertex_quadrics[v1];
-
-        // // remove any edge touching either of its endpoints from the queue
-        // HalfedgeRef cur = v0->halfedge();
-        // do {
-        //     edge_queue.remove(edge_records[cur->edge()]);
-        //     cur = cur->twin()->next();
-        // } while(cur != v0->halfedge());
-        // cur = v1->halfedge();
-        // do {
-        //     edge_queue.remove(edge_records[cur->edge()]);
-        //     cur = cur->twin()->next();
-        // } while(cur != v1->halfedge());
 
         // collapse the edge
         auto new_v_optional = collapse_edge_erase(best_edge);
@@ -1377,20 +1294,7 @@ bool Halfedge_Mesh::simplify() {
             VertexRef new_v = new_v_optional.value();
 
             // change new_v position to the optimal position
-            new_v->pos = best_edge_record.optimal; // TODO: debug this
-
-            // // assign the new quadric to the new vertex
-            // vertex_quadrics[new_v] = new_q;
-
-            // // add back any edge touching the new vertex
-            // HalfedgeRef cur_he = new_v->halfedge();
-            // do {
-            //     EdgeRef cur_e = cur_he->edge();
-
-            //     edge_records[cur_e] = Edge_Record(vertex_quadrics, cur_e);
-            //     edge_queue.insert(edge_records[cur_e]);
-            //     cur_he = cur_he->twin()->next();
-            // } while(cur_he != new_v->halfedge());
+            new_v->pos = best_edge_record.optimal;
         } else {
             return false;
         }

@@ -65,7 +65,7 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
         HalfedgeRef start = side_starts[i];
         HalfedgeRef last = start;
         int d = 1;
-        while (last->next() != start) {
+        while(last->next() != start) {
             d++;
             last = last->next();
         }
@@ -74,55 +74,57 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
     }
 
     // Prevent queries that make the mesh non-manifold
-    if (side_starts[0]->is_boundary() || side_starts[1]->is_boundary()) {
-        // if on the boundary, edge belongs to a triangle, and no other faces are adjacent to the trianlge, becomes non-manifold
+    if(side_starts[0]->is_boundary() || side_starts[1]->is_boundary()) {
+        // if on the boundary, edge belongs to a triangle, and no other faces are adjacent to the
+        // trianlge, becomes non-manifold
         int inside = side_starts[0]->is_boundary() ? 1 : 0;
-        if (side_degrees[inside] == 3 
-        && side_starts[inside]->next()->twin()->is_boundary() 
-        && side_lasts[inside]->twin()->is_boundary()) {
+        if(side_degrees[inside] == 3 && side_starts[inside]->next()->twin()->is_boundary() &&
+           side_lasts[inside]->twin()->is_boundary()) {
             // printf("non-manifold case 1\n");
             return std::nullopt;
         }
     } else {
         // if not on the boundary, but back to back triangles, becomes non-manifold.
-        for (int i = 0; i < 2; i++) {
-            if (side_degrees[i] == 3 && side_lasts[i]->twin()->next()->edge() == side_starts[i]->next()->edge()) {
+        for(int i = 0; i < 2; i++) {
+            if(side_degrees[i] == 3 &&
+               side_lasts[i]->twin()->next()->edge() == side_starts[i]->next()->edge()) {
                 // printf("non-manifold case 3\n");
                 return std::nullopt;
             }
         }
 
-        // If oth vertices of the collapsing edge are connecting to a boundary edge, becomes non-manifold
+        // If oth vertices of the collapsing edge are connecting to a boundary edge, becomes
+        // non-manifold
         int side_contians_boundary = 0;
-        for (int i = 0; i < 2; i++) {
+        for(int i = 0; i < 2; i++) {
             // walk around v and check if any of them is a boundary
             HalfedgeRef cur = side_starts[i];
             do {
-                if (cur->is_boundary()) {
+                if(cur->is_boundary()) {
                     // collapse will yield non-manifold, abort
                     side_contians_boundary++;
                     break;
                 }
                 cur = cur->twin()->next();
-            } while (cur != side_starts[i]);
+            } while(cur != side_starts[i]);
         }
-        if (side_contians_boundary == 2) {
+        if(side_contians_boundary == 2) {
             // printf("non-manifold case 2\n");
             return std::nullopt;
         }
     }
 
-    for (int i = 0; i < 2; i++) {
+    for(int i = 0; i < 2; i++) {
         // Reduce to the polygon case this face is a triangle
-        if (side_degrees[i] == 3) {
+        if(side_degrees[i] == 3) {
             FaceRef face_to_erase = side_starts[i]->face();
             side_starts[i]->face() = side_lasts[i]->twin()->face();
 
-            side_starts[i]->next()->next() = side_lasts[i]->twin()->next();  
+            side_starts[i]->next()->next() = side_lasts[i]->twin()->next();
             side_starts[i]->next()->face() = side_lasts[i]->twin()->face();
-            
+
             HalfedgeRef last_from_twin = side_lasts[i]->twin();
-            while (last_from_twin->next() != side_lasts[i]->twin()) {
+            while(last_from_twin->next() != side_lasts[i]->twin()) {
                 last_from_twin = last_from_twin->next();
             }
             last_from_twin->next() = side_starts[i];
@@ -146,7 +148,7 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
     // Rewiring elements
     // attach halfedges on vertex_delete to vertex_keep
     HalfedgeRef cur = side_starts[1]->next();
-    while (cur != side_starts[0]) {
+    while(cur != side_starts[0]) {
         cur->vertex() = side_starts[1]->vertex();
         cur = cur->twin()->next();
     }
@@ -161,9 +163,10 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
     side_starts[1]->vertex()->halfedge() = side_starts[0]->next();
 
     // recompute vertex_keep's position
-    side_starts[1]->vertex()->pos = (side_starts[1]->vertex()->center() + side_starts[0]->vertex()->center()) / 2.f;
-    VertexRef vertex_keep = side_starts[1]->vertex(); 
-    
+    side_starts[1]->vertex()->pos =
+        (side_starts[1]->vertex()->center() + side_starts[0]->vertex()->center()) / 2.f;
+    VertexRef vertex_keep = side_starts[1]->vertex();
+
     // Erase elements
     erase(side_starts[0]->edge());
     erase(side_starts[0]->vertex());
@@ -183,8 +186,6 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_face(Halfedge_Me
     return std::nullopt;
 }
 
-
-
 /*
     This method should flip the given edge and return an iterator to the
     flipped edge.
@@ -195,12 +196,13 @@ std::optional<Halfedge_Mesh::EdgeRef> Halfedge_Mesh::flip_edge(Halfedge_Mesh::Ed
     HalfedgeRef twin_he = cur_he->twin();
 
     // handle boundary
-    if (cur_he->is_boundary() || twin_he->is_boundary()) {
+    if(cur_he->is_boundary() || twin_he->is_boundary()) {
         return std::nullopt;
     }
 
     // handle detched edge (flipping from a vertex that only have two edges)
-    if (cur_he->vertex()->degree_with_boundary() <= 2 || cur_he->next()->vertex()->degree_with_boundary() <= 2) {
+    if(cur_he->vertex()->degree_with_boundary() <= 2 ||
+       cur_he->next()->vertex()->degree_with_boundary() <= 2) {
         // printf("detached edge\n");
         return std::nullopt;
     }
@@ -208,13 +210,13 @@ std::optional<Halfedge_Mesh::EdgeRef> Halfedge_Mesh::flip_edge(Halfedge_Mesh::Ed
     // handle degenrated surface
     HalfedgeRef check = cur_he->next()->next();
     do {
-        if (check->next()->vertex() == twin_he->next()->next()->vertex()) {
+        if(check->next()->vertex() == twin_he->next()->next()->vertex()) {
             // already have an edge at target position
             // printf("degenerated surface\n");
             return std::nullopt;
         }
         check = check->twin()->next();
-    } while (check != cur_he->next()->next());
+    } while(check != cur_he->next()->next());
 
     // change current halfedge
     HalfedgeRef old_next = cur_he->next();
@@ -1313,7 +1315,7 @@ bool Halfedge_Mesh::simplify() {
                                   // than or equal to 1/4 of the original
         return false;
     }
-    
+
     for(FaceRef f = faces_begin(); f != faces_end(); f++) {
         Vec3 normal = f->normal();
         Vec3 point = f->halfedge()->vertex()->pos;
@@ -1337,20 +1339,19 @@ bool Halfedge_Mesh::simplify() {
         edge_records[e] = Edge_Record(vertex_quadrics, e);
         edge_queue.insert(edge_records[e]);
     }
-    
+
     // collapse best edge until face_count is less than or equal to 1/4 of the original
     while(faces.size() > original_face_count / 4) {
         printf("faces count=%zu\n", faces.size());
-        
-        // get cheapest edge and remove from queue 
+
+        // get cheapest edge and remove from queue
         Edge_Record best_edge_record = edge_queue.top();
         edge_queue.pop();
         EdgeRef best_edge = best_edge_record.edge;
 
-        // compute the new quadric by summing the quadrics at its two endpoints.
+        // get two vertices of the best edge
         VertexRef v0 = best_edge->halfedge()->vertex();
         VertexRef v1 = best_edge->halfedge()->twin()->vertex();
-        Mat4 new_q = vertex_quadrics[v0] + vertex_quadrics[v1];
 
         // remove any edge touching either of its endpoints from the queue
         HalfedgeRef cur = v0->halfedge();
@@ -1378,11 +1379,22 @@ bool Halfedge_Mesh::simplify() {
         new_v->pos = best_edge_record.optimal;
         edge_queue.remove(best_edge_record);
 
-        // set the quadric of the new vertex to the quadric computed in Step 3
-        vertex_quadrics[new_v] = new_q;
+        // set the quadric of the new vertex
+        cur = new_v->halfedge();
+        Mat4 new_v_q = Mat4::Zero;
+        do {
+            Vec3 normal = cur->face()->normal();
+            Vec3 point = cur->vertex()->pos;
+            float d = -dot(normal, point);
+            Vec4 v(normal.x, normal.y, normal.z, d);
+            Mat4 q = outer(v, v);
+            new_v_q += q;
+            cur = cur->twin()->next();
+        } while(cur != new_v->halfedge());
+        vertex_quadrics[new_v] = new_v_q;
 
-        // Insert any edge touching the new vertex into the queue, creating new edge records for each of them.
-        // recompute surrounding faces, vertices, edges quadratics
+        // Insert any edge touching the new vertex into the queue, creating new edge records for
+        // each of them. recompute surrounding faces, vertices, edges quadratics
         cur = new_v->halfedge();
         do {
             HalfedgeRef sur_cur = cur->twin();
@@ -1395,10 +1407,9 @@ bool Halfedge_Mesh::simplify() {
                 float d = -dot(normal, point);
                 Vec4 v(normal.x, normal.y, normal.z, d);
                 Mat4 q = outer(v, v);
-                face_quadrics[sur_cur->face()] = q;  // TODO: modified again by another surrouding vertex?
                 sur_new_q += q;
                 sur_cur = sur_cur->twin()->next();
-            } while (sur_cur != cur->twin());
+            } while(sur_cur != cur->twin());
 
             // update this surrouding vertex
             vertex_quadrics[cur->twin()->vertex()] = sur_new_q;
@@ -1409,7 +1420,7 @@ bool Halfedge_Mesh::simplify() {
             edge_queue.insert(edge_records[cur->twin()->edge()]);
 
             cur = cur->twin()->next();
-        } while (cur != new_v->halfedge());
+        } while(cur != new_v->halfedge());
     }
 
     return true;

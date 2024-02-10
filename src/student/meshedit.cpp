@@ -1313,53 +1313,103 @@ bool Halfedge_Mesh::simplify() {
                                   // than or equal to 1/4 of the original
         return false;
     }
+    
+    for(FaceRef f = faces_begin(); f != faces_end(); f++) {
+        Vec3 normal = f->normal();
+        Vec3 point = f->halfedge()->vertex()->pos;
+        float d = -dot(normal, point);
+        Vec4 v(normal.x, normal.y, normal.z, d);
+        Mat4 q = outer(v, v);
+        face_quadrics[f] = q;
+    }
 
+    for(VertexRef v = vertices_begin(); v != vertices_end(); v++) {
+        Mat4 q = Mat4::Zero;
+        HalfedgeRef cur = v->halfedge();
+        do {
+            q += face_quadrics[cur->face()];
+            cur = cur->twin()->next();
+        } while(cur != v->halfedge());
+        vertex_quadrics[v] = q;
+    }
+
+    for(EdgeRef e = edges_begin(); e != edges_end(); e++) {
+        edge_records[e] = Edge_Record(vertex_quadrics, e);
+        edge_queue.insert(edge_records[e]);
+    }
+    
     // collapse best edge until face_count is less than or equal to 1/4 of the original
     while(faces.size() > original_face_count / 4) {
-        // clear all data structures
-        vertex_quadrics.clear();
-        face_quadrics.clear();
-        edge_records.clear();
-        edge_queue.queue.clear();
-
-        for(FaceRef f = faces_begin(); f != faces_end(); f++) {
-            Vec3 normal = f->normal();
-            Vec3 point = f->halfedge()->vertex()->pos;
-            float d = -dot(normal, point);
-            Vec4 v(normal.x, normal.y, normal.z, d);
-            Mat4 q = outer(v, v);
-            face_quadrics[f] = q;
-        }
-
-        for(VertexRef v = vertices_begin(); v != vertices_end(); v++) {
-            Mat4 q = Mat4::Zero;
-            HalfedgeRef cur = v->halfedge();
-            do {
-                q += face_quadrics[cur->face()];
-                cur = cur->twin()->next();
-            } while(cur != v->halfedge());
-            vertex_quadrics[v] = q;
-        }
-
-        for(EdgeRef e = edges_begin(); e != edges_end(); e++) {
-            edge_records[e] = Edge_Record(vertex_quadrics, e);
-            edge_queue.insert(edge_records[e]);
-        }
-
+        printf("faces count=%zu\n", faces.size());
+        
+        // get cheapest edge and remove from queue 
         Edge_Record best_edge_record = edge_queue.top();
         edge_queue.pop();
         EdgeRef best_edge = best_edge_record.edge;
 
-        // collapse the edge
-        auto new_v_optional = collapse_edge_erase(best_edge);
-        if(new_v_optional.has_value()) {
-            VertexRef new_v = new_v_optional.value();
+        // compute the new quadric by summing the quadrics at its two endpoints.
+        VertexRef v0 = best_edge->halfedge()->vertex();
+        VertexRef v1 = best_edge->halfedge()->twin()->vertex();
+        Mat4 new_q = vertex_quadrics[v0] + vertex_quadrics[v1];
 
-            // change new_v position to the optimal position
-            new_v->pos = best_edge_record.optimal;
-        } else {
+        // remove any edge touching either of its endpoints from the queue
+        HalfedgeRef cur = v0->halfedge();
+        do {
+            edge_queue.remove(edge_records[cur->edge()]);
+            cur = cur->twin()->next();
+        } while(cur != v0->halfedge());
+        cur = v1->halfedge();
+        do {
+            edge_queue.remove(edge_records[cur->edge()]);
+            cur = cur->twin()->next();
+        } while(cur != v1->halfedge());
+
+        // collapse the edge
+        edge_records.erase(best_edge);
+        vertex_quadrics.erase(v0);
+        vertex_quadrics.erase(v1);
+        auto new_v_optional = collapse_edge_erase(best_edge);
+        if(!new_v_optional.has_value()) {
             return false;
         }
+
+        // change new_v position to the optimal position
+        VertexRef new_v = new_v_optional.value();
+        new_v->pos = best_edge_record.optimal;
+        edge_queue.remove(best_edge_record);
+
+        // set the quadric of the new vertex to the quadric computed in Step 3
+        vertex_quadrics[new_v] = new_q;
+
+        // Insert any edge touching the new vertex into the queue, creating new edge records for each of them.
+        // recompute surrounding faces, vertices, edges quadratics
+        cur = new_v->halfedge();
+        do {
+            HalfedgeRef sur_cur = cur->twin();
+            Mat4 sur_new_q = Mat4::Zero;
+
+            // update all surrouding faces of this surrouding vertex
+            do {
+                Vec3 normal = sur_cur->face()->normal();
+                Vec3 point = sur_cur->vertex()->pos;
+                float d = -dot(normal, point);
+                Vec4 v(normal.x, normal.y, normal.z, d);
+                Mat4 q = outer(v, v);
+                face_quadrics[sur_cur->face()] = q;  // TODO: modified again by another surrouding vertex?
+                sur_new_q += q;
+                sur_cur = sur_cur->twin()->next();
+            } while (sur_cur != cur->twin());
+
+            // update this surrouding vertex
+            vertex_quadrics[cur->twin()->vertex()] = sur_new_q;
+
+            // update the edge between this surrounding vertex and the new center vertex
+            // push new edge records to the pq
+            edge_records[cur->twin()->edge()] = Edge_Record(vertex_quadrics, cur->twin()->edge());
+            edge_queue.insert(edge_records[cur->twin()->edge()]);
+
+            cur = cur->twin()->next();
+        } while (cur != new_v->halfedge());
     }
 
     return true;

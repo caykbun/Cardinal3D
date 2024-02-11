@@ -93,21 +93,24 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
             }
         }
         
-        // the more general case from back to back triangles. As long as surrouding vertices from two sides of the collapsing edge touch, will render the mesh non-manifold
-        std::set<VertexRef> surroundng_vertices;
+        // the more general case from back to back triangles. As long as surrouding vertices from two sides of the collapsing edge touch, will cause degenrated face
+        std::vector<HalfedgeRef> surroundng_vertices;
         HalfedgeRef cur = side_starts[0]->next();
-        while (cur != side_lasts[1]->twin()) {
-            surroundng_vertices.insert(cur->twin()->vertex());
+        do {
+            surroundng_vertices.push_back(cur->twin());
             cur = cur->twin()->next();
-        }
+        } while (cur != side_lasts[1]->twin());
         cur = side_starts[1]->next();
-        while (cur != side_lasts[0]->twin()) {
-            if (surroundng_vertices.count(cur->twin()->vertex())) {
-                // printf("non-manifold case 3\n");
-                return std::nullopt;
+        do {
+            for (auto &h : surroundng_vertices) {
+                if (h->vertex()->id() == cur->twin()->vertex()->id()
+                    && !(h->edge()->id() == side_lasts[1]->edge()->id() || cur->edge()->id() == side_lasts[0]->edge()->id())) {
+                    // printf("non-manifold case 3\n");
+                    return std::nullopt;
+                }
             }
             cur = cur->twin()->next();
-        }
+        } while (cur != side_lasts[0]->twin());
 
         // If both vertices of the collapsing edge are connecting to a boundary edge, becomes non-manifold
         int side_contians_boundary = 0;
@@ -131,6 +134,7 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
 
     for(int i = 0; i < 2; i++) {
         // Reduce to the polygon case this face is a triangle
+        side_degrees[i] = side_starts[i]->face()->degree();
         if(side_degrees[i] == 3) {
             FaceRef face_to_erase = side_starts[i]->face();
             side_starts[i]->face() = side_lasts[i]->twin()->face();
@@ -168,49 +172,29 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
         cur = cur->twin()->next();
     }
 
-    // rewire halfedges for the two faces
-    side_lasts[0]->next() = side_starts[0]->next();
-    side_lasts[1]->next() = side_starts[1]->next();
-
-    // update halfedge references of the elements affected by the erasion of the edge
-    side_starts[0]->face()->halfedge() = side_starts[0]->next();
-    side_starts[1]->face()->halfedge() = side_starts[1]->next();
-    side_starts[1]->vertex()->halfedge() = side_starts[0]->next();
+    // rewire halfedges, update face and vertices halfedge references
+    if (side_degrees[0] == 3) {
+        side_lasts[0]->next() = side_starts[0]->next();
+        side_lasts[1]->next() = side_starts[1]->next();
+        side_starts[0]->face()->halfedge() = side_lasts[0];
+        side_starts[1]->face()->halfedge() = side_lasts[1];
+    } else {
+        side_lasts[1]->next() = side_starts[1]->next();
+        side_lasts[0]->next() = side_starts[0]->next();
+        side_starts[1]->face()->halfedge() = side_lasts[1];
+        side_starts[0]->face()->halfedge() = side_lasts[0];
+    }
+    side_starts[1]->vertex()->halfedge() = herased.count(side_starts[1]->next()) ? side_starts[0]->next() : side_starts[1]->next();
 
     // recompute vertex_keep's position
     side_starts[1]->vertex()->pos = (side_starts[1]->vertex()->center() + side_starts[0]->vertex()->center()) / 2.f;
     VertexRef vertex_keep = side_starts[1]->vertex(); 
-
-    // debug
-    // cur = vertex_keep->halfedge();
     
     // Erase elements
     erase(side_starts[0]->edge());
     erase(side_starts[0]->vertex());
     erase(side_starts[0]);
     erase(side_starts[1]);
-
-    // printf("count=%d\n", c);
-    // do {
-    //     HalfedgeRef sur_cur = cur->twin();
-    //     Mat4 sur_new_q = Mat4::Zero;
-
-    //     // update all surrouding faces of this surrouding vertex
-    //     do {
-    //         Vec3 normal = sur_cur->face()->normal();
-    //         if (sur_cur->vertex() == side_starts[0]->vertex()) {
-    //             printf("access earsed vertex!\n");
-    //         }
-    //         Vec3 point = sur_cur->vertex()->pos;
-    //         float d = -dot(normal, point);
-    //         Vec4 v(normal.x, normal.y, normal.z, d);
-    //         Mat4 q = outer(v, v);
-    //         sur_new_q += q;
-    //         sur_cur = sur_cur->twin()->next();
-    //     } while (sur_cur != cur->twin());
-
-    //     cur = cur->twin()->next();
-    // } while (cur != vertex_keep->halfedge());
 
     return vertex_keep;
 }

@@ -66,7 +66,7 @@ std::optional<Halfedge_Mesh::FaceRef> Halfedge_Mesh::erase_vertex(Halfedge_Mesh:
 
     for(unsigned int i = 0; i < he_to_rewire_start.size(); i++) {
         he_to_rewire_start[i]->next() =
-            he_to_rewire_end[(i - 1 + he_to_rewire_start.size()) % he_to_rewire_start.size()];
+            he_to_rewire_end[(i + he_to_rewire_start.size() - 1) % he_to_rewire_start.size()];
         v_to_update[i]->halfedge() = he_to_rewire_end[i];
     }
 

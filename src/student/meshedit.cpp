@@ -2,6 +2,7 @@
 #include <queue>
 #include <set>
 #include <unordered_map>
+#include <vector>
 
 #include "../geometry/halfedge.h"
 #include "debug.h"
@@ -35,9 +36,54 @@
     edges and faces with a single face, returning the new face.
  */
 std::optional<Halfedge_Mesh::FaceRef> Halfedge_Mesh::erase_vertex(Halfedge_Mesh::VertexRef v) {
+    std::vector<HalfedgeRef> he_to_erase;
+    std::vector<HalfedgeRef> he_to_rewire_start;
+    std::vector<HalfedgeRef> he_to_rewire_end;
+    std::vector<HalfedgeRef> he_to_update;
+    std::vector<VertexRef> v_to_update;
 
-    (void)v;
-    return std::nullopt;
+    HalfedgeRef cur = v->halfedge();
+
+    // create new face
+    FaceRef new_f = new_face();
+    new_f->halfedge() = cur->next();
+
+    do {
+        he_to_erase.push_back(cur);
+
+        HalfedgeRef cur2 = cur;
+        do {
+            cur2 = cur2->next();
+            he_to_update.push_back(cur2);
+        } while(cur2->next()->next() != cur);
+        he_to_rewire_start.push_back(cur2);
+
+        he_to_rewire_end.push_back(cur->next());
+
+        v_to_update.push_back(cur->twin()->vertex());
+        cur = cur->twin()->next();
+    } while(cur != v->halfedge());
+
+    for(unsigned int i = 0; i < he_to_rewire_start.size(); i++) {
+        he_to_rewire_start[i]->next() =
+            he_to_rewire_end[(i - 1 + he_to_rewire_start.size()) % he_to_rewire_start.size()];
+        v_to_update[i]->halfedge() = he_to_rewire_end[i];
+    }
+
+    for(unsigned int i = 0; i < he_to_update.size(); i++) {
+        he_to_update[i]->face() = new_f;
+    }
+
+    for(unsigned int i = 0; i < he_to_erase.size(); i++) {
+        erase(he_to_erase[i]->edge());
+        erase(he_to_erase[i]->face());
+        erase(he_to_erase[i]->twin());
+        erase(he_to_erase[i]);
+    }
+
+    erase(v);
+
+    return new_f;
 }
 
 /*
@@ -130,24 +176,26 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
                 return std::nullopt;
             }
         }
-        
-        // the more general case from back to back triangles. As long as surrouding vertices from two sides of the collapsing edge touch, will render the mesh non-manifold
+
+        // the more general case from back to back triangles. As long as surrouding vertices from
+        // two sides of the collapsing edge touch, will render the mesh non-manifold
         std::set<VertexRef> surroundng_vertices;
         HalfedgeRef cur = side_starts[0]->next();
-        while (cur != side_lasts[1]->twin()) {
+        while(cur != side_lasts[1]->twin()) {
             surroundng_vertices.insert(cur->twin()->vertex());
             cur = cur->twin()->next();
         }
         cur = side_starts[1]->next();
-        while (cur != side_lasts[0]->twin()) {
-            if (surroundng_vertices.count(cur->twin()->vertex())) {
+        while(cur != side_lasts[0]->twin()) {
+            if(surroundng_vertices.count(cur->twin()->vertex())) {
                 // printf("non-manifold case 3\n");
                 return std::nullopt;
             }
             cur = cur->twin()->next();
         }
 
-        // If both vertices of the collapsing edge are connecting to a boundary edge, becomes non-manifold
+        // If both vertices of the collapsing edge are connecting to a boundary edge, becomes
+        // non-manifold
         int side_contians_boundary = 0;
         for(int i = 0; i < 2; i++) {
             // walk around v and check if any of them is a boundary
@@ -181,7 +229,7 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
                 last_from_twin = last_from_twin->next();
             }
             last_from_twin->next() = side_starts[i];
-            
+
             // erase face
             erase(face_to_erase);
 
@@ -216,12 +264,13 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
     side_starts[1]->vertex()->halfedge() = side_starts[0]->next();
 
     // recompute vertex_keep's position
-    side_starts[1]->vertex()->pos = (side_starts[1]->vertex()->center() + side_starts[0]->vertex()->center()) / 2.f;
-    VertexRef vertex_keep = side_starts[1]->vertex(); 
+    side_starts[1]->vertex()->pos =
+        (side_starts[1]->vertex()->center() + side_starts[0]->vertex()->center()) / 2.f;
+    VertexRef vertex_keep = side_starts[1]->vertex();
 
     // debug
     // cur = vertex_keep->halfedge();
-    
+
     // Erase elements
     erase(side_starts[0]->edge());
     erase(side_starts[0]->vertex());
@@ -1420,8 +1469,8 @@ bool Halfedge_Mesh::simplify() {
     // collapse best edge until face_count is less than or equal to 1/4 of the original
     while(faces.size() > original_face_count / 4) {
         // printf("faces count=%zu\n", faces.size());
-        
-        // get cheapest edge and remove from queue 
+
+        // get cheapest edge and remove from queue
         Edge_Record best_edge_record = edge_queue.top();
         edge_queue.pop();
         EdgeRef best_edge = best_edge_record.edge;

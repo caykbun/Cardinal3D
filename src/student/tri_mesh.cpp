@@ -11,8 +11,18 @@ BBox Triangle::bbox() const {
 
     // Beware of flat/zero-volume boxes! You may need to
     // account for that here, or later on in BBox::intersect
+    Vec3 v_0 = vertex_list[v0].position;
+    Vec3 v_1 = vertex_list[v1].position;
+    Vec3 v_2 = vertex_list[v2].position;
 
-    BBox box;
+    Vec3 box_min = Vec3 {std::min(std::min(v_0.x , v_1.x), v_2.x),
+                        std::min(std::min(v_0.y , v_1.y), v_2.y),
+                        std::min(std::min(v_0.z , v_1.z), v_2.z)};
+    Vec3 box_max = Vec3 {std::max(std::max(v_0.x , v_1.x), v_2.x),
+                        std::max(std::max(v_0.y , v_1.y), v_2.y),
+                        std::max(std::max(v_0.z , v_1.z), v_2.z)};
+    // TODO: account for flat/zero-volume boxes            
+    BBox box(box_min, box_max);
     return box;
 }
 
@@ -26,9 +36,6 @@ Trace Triangle::hit(const Ray& ray) const {
     Tri_Mesh_Vert v_2 = vertex_list[v2];
 
     // here just to avoid unused variable warnings, students should remove the following three lines.
-    (void)v_0;
-    (void)v_1;
-    (void)v_2;
     
     // TODO (PathTracer): Task 2
     // Intersect this ray with a triangle defined by the above three points.
@@ -43,6 +50,44 @@ Trace Triangle::hit(const Ray& ray) const {
     ret.position = Vec3{}; // where was the intersection?
     ret.normal = Vec3{};   // what was the surface normal at the intersection?
                            // (this should be interpolated between the three vertex normals)
+
+    Vec3 e1 = v_1.position - v_0.position;
+    Vec3 e2 = v_2.position - v_0.position;
+
+    // TODO: can a trianlge with this area be hit by a ray? What does this mean?
+    if (cross(e1, e2).norm() / 2 == 0) {
+        // area of the trianlge is 0
+        return ret;
+    }
+    
+    Vec3 s = ray.point - v_0.position;
+    Vec3 e1d = cross(e1, ray.dir);
+    Vec3 nse2 = -cross(s, e2);
+
+    if (dot(e1d, e2) == 0) {
+        // meaning the e1 x d is orthogonal to e1, e2, and d, furhter meaning e1 x d is a 
+        // normal vector to the triangle, and d is parallel to the triangle's plane
+        // TODO: ignore?
+        return ret;
+    }
+
+    Vec3 uvt = 1.f / dot(e1d, e2) * Vec3{dot(nse2, ray.dir), dot(e1d, s), dot(nse2, e1)};
+    if (uvt.x < 0 || uvt.y < 0 || uvt.x + uvt.y > 1) {
+        // outside the triangle
+        return ret;
+    }
+
+    // check if in valid hit range 
+    if (uvt.z < ray.dist_bounds.x || uvt.z > ray.dist_bounds.y) {
+        return ret;
+    }
+
+    ray.dist_bounds.y = uvt.z;
+    ret.hit = true;
+    ret.distance = uvt.z;
+    ret.position = ray.point + uvt.z * ray.dir;
+    ret.normal = (1 - uvt.x - uvt.y) * v_0.normal + uvt.x * v_1.normal + uvt.y * v_2.normal;
+
     return ret;
 }
 

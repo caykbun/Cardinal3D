@@ -2,8 +2,11 @@
 #include "../rays/bvh.h"
 #include "debug.h"
 #include <stack>
+// #include "bvh.h"
 
 namespace PT {
+
+#define NUM_BUCKETS 32
 
 // construct BVH hierarchy given a vector of prims
 template<typename Primitive>
@@ -67,50 +70,120 @@ void BVH<Primitive>::build(std::vector<Primitive>&& prims, size_t max_leaf_size)
 
     // set up root node (root BVH). Notice that it contains all primitives.
     size_t root_node_addr = new_node();
+    root_idx = root_node_addr;
     Node& node = nodes[root_node_addr];
     node.bbox = bb;
     node.start = 0;
     node.size = primitives.size();
 
-    // Create bounding boxes for children
-    BBox split_leftBox;
-    BBox split_rightBox;
+    build_helper(root_node_addr, max_leaf_size);
+}
 
-    // compute bbox for left child
-    Primitive& p = primitives[0];
-    BBox pbb = p.bbox();
-    split_leftBox.enclose(pbb);
+template<typename Primitive>
+void BVH<Primitive>::build_helper(size_t node_addr, size_t max_leaf_size) {
+    // Decide whether to conclude with a leaf node or keep splitting
+    if (nodes[node_addr].size <= std::max(max_leaf_size, static_cast<size_t>(NUM_BUCKETS))) {
+        return;
+    };
 
-    // compute bbox for right child
-    for(size_t i = 1; i < primitives.size(); ++i) {
-        Primitive& p = primitives[i];
-        BBox pbb = p.bbox();
-        split_rightBox.enclose(pbb);
+    // Choose the best SAH split
+    // compute bucket size
+    Vec3 step = (nodes[node_addr].bbox.max -  nodes[node_addr].bbox.min) / NUM_BUCKETS;
+    if (step == Vec3(0.f, 0.f, 0.f)) {
+        // zero-volume bounding box
+        return;
+    }
+   
+    float dim_min_cost = std::numeric_limits<float>::max();
+    int best_dim = 0;
+    int best_split_idx = 0;
+    BBox left;
+    BBox right;
+    size_t left_count = 0;
+
+    // for each of x, y, z axis
+    for (int dim = 0; dim < 3; dim++) {
+        if (step[dim] == 0) {
+            // flat box
+            continue;
+        }
+
+        BBox p_bbox[NUM_BUCKETS];
+        size_t p_count[NUM_BUCKETS];
+        memset(p_count, 0, sizeof(size_t) * NUM_BUCKETS);
+
+        // assign each primitive to bucket, compute bucket bounding boxes and prims count
+        // TODO: can we get the actual centroid of the prim? Using center of the bbox now
+        for (size_t i = nodes[node_addr].start; i < nodes[node_addr].start + nodes[node_addr].size; i++) {
+            int bucket = floor((primitives[i].bbox().center()[dim] - nodes[node_addr].bbox.min[dim]) / step[dim]);
+            if (bucket == NUM_BUCKETS) bucket = NUM_BUCKETS - 1;
+            p_bbox[bucket].enclose(primitives[i].bbox());
+            p_count[bucket]++;
+        }
+
+        // compute left and right bounding boxes under each split
+        BBox p_bbox_right[NUM_BUCKETS];
+        memcpy(p_bbox_right, p_bbox, sizeof(BBox) * NUM_BUCKETS);
+        for (int i = 1; i < NUM_BUCKETS; i++) {
+            p_bbox[i].enclose(p_bbox[i - 1]);
+            p_count[i] += p_count[i - 1];
+            p_bbox_right[NUM_BUCKETS - 1 - i].enclose(p_bbox_right[NUM_BUCKETS - i]);
+        }
+        
+        // compute the SAH cost for each split and record the best split within this dimension
+        float Sn = nodes[node_addr].bbox.surface_area();
+        float min_cost = std::numeric_limits<float>::max();
+        int best_idx = 0;
+        for (int i = 0; i < NUM_BUCKETS - 1; i++) {
+            size_t Na = p_count[i];
+            size_t Nb = nodes[node_addr].size - Na;
+            float cost = p_bbox[i].surface_area() / Sn * Na + p_bbox_right[i + 1].surface_area() / Sn * Nb;
+            if (cost < min_cost) {
+                min_cost = cost;
+                best_idx = i;
+            }
+        }
+
+        // record the best split across dimensions
+        if (min_cost < dim_min_cost) {
+            dim_min_cost = min_cost;
+            best_dim = dim;
+            best_split_idx = best_idx;
+            left = p_bbox[best_idx];
+            right = p_bbox_right[best_idx + 1];
+            left_count = p_count[best_idx];
+        }
     }
 
-    // Note that by construction in this simple example, the primitives are
-    // contiguous as required. But in the students real code, students are
-    // responsible for reorganizing the primitives in the primitives array so that
-    // after a SAH split is computed, the chidren refer to contiguous ranges of primitives.
-
-    size_t startl = 0;  // starting prim index of left child
-    size_t rangel = 1;  // number of prims in left child
-    size_t startr = startl + rangel;  // starting prim index of right child
-    size_t ranger = primitives.size() - rangel; // number of prims in right child
+    // partition the primitives based on the best split
+    float split = nodes[node_addr].bbox.min[best_dim] + (best_split_idx + 1) * step[best_dim];
+    size_t first_larger = nodes[node_addr].start;
+    for (size_t i = nodes[node_addr].start; i < nodes[node_addr].start + nodes[node_addr].size; i++) {
+        if (primitives[i].bbox().center()[best_dim] < split) {
+            std::swap(primitives[first_larger], primitives[i]);
+            first_larger++;
+        }
+    }
 
     // create child nodes
     size_t node_addr_l = new_node();
     size_t node_addr_r = new_node();
-    nodes[root_node_addr].l = node_addr_l;
-    nodes[root_node_addr].r = node_addr_r;
+    nodes[node_addr].l = node_addr_l;
+    nodes[node_addr].r = node_addr_r;
 
-    nodes[node_addr_l].bbox = split_leftBox;
-    nodes[node_addr_l].start = startl;
-    nodes[node_addr_l].size = rangel;
+    nodes[node_addr_l].bbox = left;
+    nodes[node_addr_l].start = nodes[node_addr].start;
+    nodes[node_addr_l].size = first_larger - nodes[node_addr].start;
 
-    nodes[node_addr_r].bbox = split_rightBox;
-    nodes[node_addr_r].start = startr;
-    nodes[node_addr_r].size = ranger;
+    nodes[node_addr_r].bbox = right;
+    nodes[node_addr_r].start = first_larger;
+    nodes[node_addr_r].size = nodes[node_addr].start + nodes[node_addr].size - first_larger;
+
+    assert(left_count == nodes[node_addr_l].size);
+
+    // recursively build BVH
+    build_helper(node_addr_l, max_leaf_size);
+    build_helper(node_addr_r, max_leaf_size);
 }
 
 template<typename Primitive>
@@ -125,11 +198,43 @@ Trace BVH<Primitive>::hit(const Ray& ray) const {
     // Again, remember you can use hit() on any Primitive value.
 
     Trace ret;
-    for(const Primitive& prim : primitives) {
-        Trace hit = prim.hit(ray);
-        ret = Trace::min(ret, hit);
-    }
+    ret.distance = std::numeric_limits<float>::max();
+    hit_helper(ray, root_idx, ret);
     return ret;
+}
+
+template<typename Primitive>
+void BVH<Primitive>::hit_helper(const Ray& ray, size_t node_addr, Trace& closest) const {
+    const Node& node = nodes[node_addr];
+    if (node.is_leaf()) {
+        for (size_t i = node.start; i < node.start + node.size; i++){
+            Trace trace = primitives[i].hit(ray);
+            if (trace.hit) {
+                closest = trace;
+            }
+        }
+        return;
+    }
+
+    // compute ray intersection with the two child's bounding boxes and proceed with the closer one
+    // TODO: is this how you use the time parameter?
+    Vec2 hit_range_l = Vec2(0.f, std::numeric_limits<float>::max());
+    bool hit_l = nodes[node.l].bbox.hit(ray, hit_range_l);
+    Vec2 hit_range_r = Vec2(0.f, std::numeric_limits<float>::max());
+    bool hit_r = nodes[node.r].bbox.hit(ray, hit_range_r);
+    if (hit_l && hit_r) {
+        size_t first = hit_range_l.x < hit_range_r.x ? node.l : node.r;
+        size_t second = hit_range_l.x >= hit_range_r.x ? node.l : node.r;
+        Vec2* hit_range_second = hit_range_l.x >= hit_range_r.x ? &hit_range_l : &hit_range_r;
+        hit_helper(ray, first, closest);
+        if (hit_range_second->x < closest.distance) {
+            hit_helper(ray, second, closest);
+        }
+    } else if (hit_l) {
+        hit_helper(ray, node.l, closest);
+    } else if (hit_r) {
+        hit_helper(ray, node.r, closest);
+    }
 }
 
 template<typename Primitive>

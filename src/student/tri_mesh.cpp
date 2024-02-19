@@ -21,7 +21,7 @@ BBox Triangle::bbox() const {
     Vec3 box_max = Vec3 {std::max(std::max(v_0.x , v_1.x), v_2.x),
                         std::max(std::max(v_0.y , v_1.y), v_2.y),
                         std::max(std::max(v_0.z , v_1.z), v_2.z)};
-    // TODO: account for flat/zero-volume boxes            
+         
     BBox box(box_min, box_max);
     return box;
 }

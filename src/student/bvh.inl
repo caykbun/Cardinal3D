@@ -198,8 +198,11 @@ Trace BVH<Primitive>::hit(const Ray& ray) const {
     // Again, remember you can use hit() on any Primitive value.
 
     Trace ret;
+    ret.hit = false;
     ret.distance = std::numeric_limits<float>::max();
-    hit_helper(ray, root_idx, ret);
+    Vec2 hit_range = Vec2(0.f, std::numeric_limits<float>::max());
+    bool hit_root = nodes[root_idx].bbox.hit(ray, hit_range);
+    if (hit_root) hit_helper(ray, root_idx, ret);
     return ret;
 }
 
@@ -209,7 +212,7 @@ void BVH<Primitive>::hit_helper(const Ray& ray, size_t node_addr, Trace& closest
     if (node.is_leaf()) {
         for (size_t i = node.start; i < node.start + node.size; i++){
             Trace trace = primitives[i].hit(ray);
-            if (trace.hit) {
+            if (trace.hit && trace.distance < closest.distance) {
                 closest = trace;
             }
         }
@@ -217,7 +220,6 @@ void BVH<Primitive>::hit_helper(const Ray& ray, size_t node_addr, Trace& closest
     }
 
     // compute ray intersection with the two child's bounding boxes and proceed with the closer one
-    // TODO: is this how you use the time parameter?
     Vec2 hit_range_l = Vec2(0.f, std::numeric_limits<float>::max());
     bool hit_l = nodes[node.l].bbox.hit(ray, hit_range_l);
     Vec2 hit_range_r = Vec2(0.f, std::numeric_limits<float>::max());

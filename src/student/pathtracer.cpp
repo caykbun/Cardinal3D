@@ -115,6 +115,10 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
                 // TODO (PathTracer): Task 4
                 // Construct a shadow ray and compute whether the intersected surface is
                 // in shadow. Only accumulate light if not in shadow.
+                Ray shadow_ray(hit.position, sample.direction);
+                shadow_ray.dist_bounds.x = EPS_F;
+                Trace shadow_hit = scene.hit(shadow_ray);
+                if (shadow_hit.hit && shadow_hit.distance < sample.distance) continue;
 
                 // Tip: since you're creating the shadow ray at the intersection point, it may
                 // intersect the surface at time=0. Similarly, if the ray is allowed to have

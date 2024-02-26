@@ -193,7 +193,7 @@ set_target_properties(Cardinal3D PROPERTIES
 if(MSVC)
     target_compile_options(Cardinal3D PRIVATE /W4 /WX /wd4201 /wd4840 /wd4100 /fp:fast)
 else()
-    target_compile_options(Cardinal3D PRIVATE -Wall -Wextra -Werror -Wno-reorder -Wno-unused-parameter)
+    target_compile_options(Cardinal3D PRIVATE -Wall -Wextra -Wno-reorder -Wno-unused-parameter)
 endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")

@@ -126,10 +126,11 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
                 // arbitrary length, it will hit the light it was cast at. Therefore, you should
                 // modify the time_bounds of your shadow ray to account for this. Using EPS_F is
                 // recommended.
-                Vec3 shadow_origin = hit.position + EPS_F * sample.direction;
+                Vec3 shadow_origin = hit.position;
                 Vec3 shadow_dir = sample.direction;
                 Ray shadow_ray(shadow_origin, shadow_dir);
-                shadow_ray.dist_bounds.y = sample.distance - 2 * EPS_F;
+                shadow_ray.dist_bounds.x = EPS_F;
+                shadow_ray.dist_bounds.y = sample.distance - EPS_F;
                 Trace shadow_hit = scene.hit(shadow_ray);
                 if(shadow_hit.hit) continue;
 
@@ -172,6 +173,37 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
 
     // (5) Add contribution due to incoming light with proper weighting. Remember to add in
     // the BSDF sample emissive term.
+
+    // (1)
+    if (ray.depth >= max_depth) {
+        return radiance_out;
+    }
+
+    // (2)
+    BSDF_Sample bsdf_sample = bsdf.sample(out_dir); // Directions are in object space
+
+    // (3)
+    float cos_theta = bsdf_sample.direction.y;
+    Spectrum throughput = ray.throughput * bsdf_sample.attenuation * cos_theta / bsdf_sample.pdf;
+    float terminate_prob = 1.0f - std::max(throughput.luma(), 0.05f);
+    if (RNG::coin_flip(terminate_prob)) {
+        return radiance_out;
+    }
+
+    // (4)
+    Vec3 in_dir = object_to_world.rotate(bsdf_sample.direction);
+    Ray in_ray(hit.position, in_dir);
+    in_ray.throughput = throughput;
+    in_ray.depth = ray.depth + 1;
+    in_ray.dist_bounds.x = EPS_F;
+    Spectrum incoming_radiance = trace_ray(in_ray);
+
+    // (5)
+    if (ray.depth == 0) {
+        radiance_out += bsdf_sample.emissive;
+    }
+    radiance_out += incoming_radiance * bsdf_sample.attenuation * cos_theta / bsdf_sample.pdf;
+
     return radiance_out;
 }
 

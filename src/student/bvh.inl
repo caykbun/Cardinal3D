@@ -2,6 +2,7 @@
 #include "../rays/bvh.h"
 #include "debug.h"
 #include <stack>
+#include <cstring>
 // #include "bvh.h"
 
 namespace PT {

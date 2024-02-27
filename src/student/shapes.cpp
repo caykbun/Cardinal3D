@@ -39,7 +39,7 @@ Trace Sphere::hit(const Ray& ray) const {
     // b^2 - 4ac = 4(o \dot d)^2 - 4|d|^2(|o|^2 - r)
     float a = pow(ray.dir.norm(), 2);
     float b = 2 * dot(ray.point, ray.dir);
-    float c = pow(ray.point.norm(), 2) - radius;
+    float c = pow(ray.point.norm(), 2) - radius * radius;
     float test = b * b - 4 * a * c;
 
     if (test < 0) {
@@ -57,8 +57,6 @@ Trace Sphere::hit(const Ray& ray) const {
     } else if (t2 != t1 && t2 >= ray.dist_bounds.x && t2 <= ray.dist_bounds.y) {
         intersection_t = t2;
     }
-
-    // printf("sphere: %.3f\n", intersection_t);
 
     if (intersection_t >= 0) {
         ret.hit = true;

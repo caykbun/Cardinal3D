@@ -116,10 +116,10 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
                 // TODO (PathTracer): Task 4
                 // Construct a shadow ray and compute whether the intersected surface is
                 // in shadow. Only accumulate light if not in shadow.
-                Ray shadow_ray(hit.position, sample.direction);
-                shadow_ray.dist_bounds.x = EPS_F;
-                Trace shadow_hit = scene.hit(shadow_ray);
-                if (shadow_hit.hit && shadow_hit.distance < sample.distance) continue;
+                // Ray shadow_ray(hit.position, sample.direction);
+                // shadow_ray.dist_bounds.x = EPS_F;
+                // Trace shadow_hit = scene.hit(shadow_ray);
+                // if (shadow_hit.hit && shadow_hit.distance < sample.distance) continue;
 
                 // Tip: since you're creating the shadow ray at the intersection point, it may
                 // intersect the surface at time=0. Similarly, if the ray is allowed to have
@@ -196,10 +196,11 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
     in_ray.throughput = throughput;
     in_ray.depth = ray.depth + 1;
     in_ray.dist_bounds.x = EPS_F;
+    in_ray.from_discrete = bsdf.is_discrete();
     Spectrum incoming_radiance = trace_ray(in_ray);
 
     // (5)
-    if (ray.depth == 0) {
+    if (ray.depth == 0 || ray.from_discrete) { // For discrete material we haven't accumulated the direct lighting
         radiance_out += bsdf_sample.emissive;
     }
     radiance_out += incoming_radiance * bsdf_sample.attenuation * cos_theta / bsdf_sample.pdf;

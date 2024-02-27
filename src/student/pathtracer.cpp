@@ -192,10 +192,11 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
     in_ray.throughput = throughput;
     in_ray.depth = ray.depth + 1;
     in_ray.dist_bounds.x = EPS_F;
+    in_ray.from_discrete = bsdf.is_discrete();
     Spectrum incoming_radiance = trace_ray(in_ray);
 
     // (5)
-    if (ray.depth == 0) {
+    if (ray.depth == 0 || ray.from_discrete) { // For discrete material we haven't accumulated the direct lighting
         radiance_out += bsdf_sample.emissive;
     }
     radiance_out += incoming_radiance * bsdf_sample.attenuation * cos_theta / bsdf_sample.pdf;

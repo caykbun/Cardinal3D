@@ -32,20 +32,19 @@ Spectrum Pathtracer::trace_pixel(size_t x, size_t y) {
     // specified pixel
 
     // Step 1: Compute normalized screen space point
-    Vec2 sample_xy;   // pixel space coordinates of sample points
-    if (n_samples == 1) {
-        sample_xy = xy + Vec2 {.5f, .5f};
+    Vec2 sample_xy; // pixel space coordinates of sample points
+    if(n_samples == 1) {
+        sample_xy = xy + Vec2{.5f, .5f};
     } else {
         float pdf = 0;
-        auto rect_uni = Samplers::Rect::Uniform(Vec2 {1.f, 1.f});
+        auto rect_uni = Samplers::Rect::Uniform(Vec2{1.f, 1.f});
         sample_xy = xy + rect_uni.sample(pdf);
     }
 
     // Step 2:
     Ray out = camera.generate_ray(sample_xy / wh);
 
-    if (RNG::coin_flip(0.0003f))
-       log_ray(out, 10.0f);
+    if(RNG::coin_flip(0.0003f)) log_ray(out, 10.0f);
 
     return trace_ray(out);
 }
@@ -85,9 +84,9 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
 
     // TODO (PathTracer): Task 4
     // The starter code sets radiance_out to (0.25,0.25,0.25) so that you can test your geometry
-    // queries before you implement real lighting in Tasks 4 and 5. (i.e, anything that gets hit is not black.)
-    // You should change this to (0,0,0) and accumulate the direct and indirect lighting computed below.
-    // Spectrum radiance_out = Spectrum(0.25f);
+    // queries before you implement real lighting in Tasks 4 and 5. (i.e, anything that gets hit is
+    // not black.) You should change this to (0,0,0) and accumulate the direct and indirect lighting
+    // computed below. Spectrum radiance_out = Spectrum(0.25f);
     Spectrum radiance_out = Spectrum(0.0f);
     {
 
@@ -98,8 +97,9 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
             int samples = light.is_discrete() ? 1 : (int)n_area_samples;
             for(int i = 0; i < samples; i++) {
 
-                // Grab a sample of the light source. See rays/light.h for definition of this struct.
-                // Most importantly for Task 4, it contains the distance to the light from hit.position. 
+                // Grab a sample of the light source. See rays/light.h for definition of this
+                // struct. Most importantly for Task 4, it contains the distance to the light from
+                // hit.position.
                 Light_Sample sample = light.sample(hit.position);
                 Vec3 in_dir = world_to_object.rotate(sample.direction);
 
@@ -137,7 +137,8 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
                 // Note: that along with the typical cos_theta, pdf factors, we divide by samples.
                 // This is because we're doing another monte-carlo estimate of the lighting from
                 // area lights here.
-                radiance_out += (cos_theta / (samples * sample.pdf)) * sample.radiance * attenuation;
+                radiance_out +=
+                    (cos_theta / (samples * sample.pdf)) * sample.radiance * attenuation;
             }
         };
 
@@ -146,10 +147,8 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
         if(!bsdf.is_discrete()) {
 
             // loop over all the lights and accumulate radiance.
-            for(const auto& light : lights)
-                sample_light(light);
-            if(env_light.has_value())
-                sample_light(env_light.value());
+            for(const auto& light : lights) sample_light(light);
+            if(env_light.has_value()) sample_light(env_light.value());
         }
     }
 
@@ -175,7 +174,7 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
     // the BSDF sample emissive term.
 
     // (1)
-    if (ray.depth >= max_depth) {
+    if(ray.depth >= max_depth) {
         return radiance_out;
     }
 
@@ -186,7 +185,7 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
     float cos_theta = bsdf_sample.direction.y;
     Spectrum throughput = ray.throughput * bsdf_sample.attenuation * cos_theta / bsdf_sample.pdf;
     float terminate_prob = 1.0f - std::max(throughput.luma(), 0.05f);
-    if (RNG::coin_flip(terminate_prob)) {
+    if(RNG::coin_flip(terminate_prob)) {
         return radiance_out;
     }
 
@@ -200,10 +199,12 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
     Spectrum incoming_radiance = trace_ray(in_ray);
 
     // (5)
-    if (ray.depth == 0 || ray.from_discrete) { // For discrete material we haven't accumulated the direct lighting
+    if(ray.depth == 0 ||
+       ray.from_discrete) { // For discrete material we haven't accumulated the direct lighting
         radiance_out += bsdf_sample.emissive;
     }
-    radiance_out += incoming_radiance * bsdf_sample.attenuation * cos_theta / bsdf_sample.pdf;
+    radiance_out += incoming_radiance * bsdf_sample.attenuation * cos_theta /
+                    (bsdf_sample.pdf * (1.0f - terminate_prob));
 
     return radiance_out;
 }

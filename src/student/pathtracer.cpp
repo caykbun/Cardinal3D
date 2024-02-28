@@ -180,6 +180,10 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
 
     // (2)
     BSDF_Sample bsdf_sample = bsdf.sample(out_dir); // Directions are in object space
+    if(ray.depth == 0 ||
+       ray.from_discrete) { // For discrete material we haven't accumulated the direct lighting
+        radiance_out += bsdf_sample.emissive;
+    }
 
     // (3)
     float cos_theta = bsdf_sample.direction.y;
@@ -199,10 +203,6 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
     Spectrum incoming_radiance = trace_ray(in_ray);
 
     // (5)
-    if(ray.depth == 0 ||
-       ray.from_discrete) { // For discrete material we haven't accumulated the direct lighting
-        radiance_out += bsdf_sample.emissive;
-    }
     radiance_out += incoming_radiance * bsdf_sample.attenuation * cos_theta /
                     (bsdf_sample.pdf * (1.0f - terminate_prob));
 

@@ -28,7 +28,18 @@ Vec3 refract(Vec3 out_dir, float index_of_refraction, bool& was_internal) {
     // you want to compute the 'input' direction that would cause this output,
     // and to do so you can simply find the direction that out_dir would refract
     // _to_, as refraction is symmetric.
-    return Vec3();
+
+    float eta = out_dir.y > 0 ? 1.f / index_of_refraction : index_of_refraction;
+
+    if (abs(out_dir.y) < asin(1 / eta)) {
+        was_internal = true;
+        return {};
+    }
+    
+    float cos_theta_i = sqrt(1 - (1 - pow(abs(out_dir.y), 2)) * pow(eta, 2));
+    Vec3 in_dir {-eta * out_dir.x, -cos_theta_i * (out_dir.y / abs(out_dir.y)), -eta * out_dir.z};
+    // assert(dot(in_dir, out_dir) < 0);
+    return in_dir;
 }
 
 BSDF_Sample BSDF_Lambertian::sample(Vec3 out_dir) const {
@@ -79,11 +90,37 @@ BSDF_Sample BSDF_Glass::sample(Vec3 out_dir) const {
 
     // Be wary of your eta1/eta2 ratio - are you entering or leaving the surface?
 
-    BSDF_Sample ret;
-    ret.attenuation = Spectrum(); // What is the ratio of reflected/incoming light?
-    ret.direction = Vec3();       // What direction should we sample incoming light from?
-    ret.pdf = 0.0f; // Was was the PDF of the sampled direction? (In this case, the PMF)
-    return ret;
+    // (1)
+    float R0 = pow((1 - index_of_refraction) / (1 + index_of_refraction), 2);
+    float fresnel_coef = R0 + (1 - R0) * pow((1 - abs(out_dir.y)), 5);
+    
+    // (2)
+    if (RNG::coin_flip(fresnel_coef)) {
+        // reflection
+        BSDF_Sample ret;
+        ret.direction = reflect(out_dir);
+        ret.pdf = fresnel_coef;
+
+        // (3)
+        ret.attenuation = Spectrum(fresnel_coef / abs(ret.direction.y));
+        return ret;
+    } else {
+        // refraction
+        BSDF_Sample ret;
+        ret.pdf = 0;
+
+        BSDF_Refract refract {transmittance, index_of_refraction};
+        while (ret.pdf == 0) {
+            ret = refract.sample(out_dir);
+            // total internal reflection if still 0, technically should not happen because we are using fresnel_coef
+        }
+        ret.pdf *= (1 - fresnel_coef);
+        float eta = out_dir.y > 0 ? 1.f / index_of_refraction : index_of_refraction;
+
+        // (3)
+        ret.attenuation = Spectrum((1 - fresnel_coef) / abs(ret.direction.y) / pow(eta, 2));
+        return ret;
+    }
 }
 
 Spectrum BSDF_Glass::evaluate(Vec3 out_dir, Vec3 in_dir) const {
@@ -113,9 +150,10 @@ BSDF_Sample BSDF_Refract::sample(Vec3 out_dir) const {
     // Be wary of your eta1/eta2 ratio - are you entering or leaving the surface?
 
     BSDF_Sample ret;
-    ret.attenuation = Spectrum(); // What is the ratio of reflected/incoming light?
-    ret.direction = Vec3();       // What direction should we sample incoming light from?
-    ret.pdf = 0.0f; // Was was the PDF of the sampled direction? (In this case, the PMF)
+    ret.attenuation = transmittance; // What is the ratio of reflected/incoming light?
+    bool was_internal = false;
+    ret.direction = refract(out_dir, index_of_refraction, was_internal);       // What direction should we sample incoming light from?
+    ret.pdf = was_internal ? 0.0f : 1.0f; // Was was the PDF of the sampled direction? (In this case, the PMF)
     return ret;
 }
 

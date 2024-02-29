@@ -186,7 +186,7 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
     }
 
     // (3)
-    float cos_theta = bsdf_sample.direction.y;
+    float cos_theta = abs(bsdf_sample.direction.y);
     Spectrum throughput = ray.throughput * bsdf_sample.attenuation * cos_theta / bsdf_sample.pdf;
     float terminate_prob = 1.0f - std::max(throughput.luma(), 0.05f);
     if(RNG::coin_flip(terminate_prob)) {

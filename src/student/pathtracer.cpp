@@ -66,6 +66,11 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
         hit.normal = -hit.normal;
     }
 
+    // Get parameters for volume rendering
+    Spectrum absorption(0.8);
+    Spectrum scattering(0.0);
+    Spectrum vol_transmittance = volume_rendering ? (-1.f * absorption * hit.distance).exp() : Spectrum(1.f);
+
     // Set up a coordinate frame at the hit point, where the surface normal becomes {0, 1, 0}
     // This gives us out_dir and later in_dir in object space, where computations involving the
     // normal become much easier. For example, cos(theta) = dot(N,dir) = dir.y!
@@ -138,7 +143,7 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
                 // This is because we're doing another monte-carlo estimate of the lighting from
                 // area lights here.
                 radiance_out +=
-                    (cos_theta / (samples * sample.pdf)) * sample.radiance * attenuation;
+                 (cos_theta / (samples * sample.pdf)) * sample.radiance * attenuation;
             }
         };
 
@@ -175,7 +180,7 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
 
     // (1)
     if(ray.depth >= max_depth) {
-        return radiance_out;
+        return radiance_out * vol_transmittance;
     }
 
     // (2)
@@ -187,10 +192,10 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
 
     // (3)
     float cos_theta = abs(bsdf_sample.direction.y);
-    Spectrum throughput = ray.throughput * bsdf_sample.attenuation * cos_theta / bsdf_sample.pdf;
+    Spectrum throughput = ray.throughput * bsdf_sample.attenuation * cos_theta * vol_transmittance / bsdf_sample.pdf;
     float terminate_prob = 1.0f - std::max(throughput.luma(), 0.05f);
     if(RNG::coin_flip(terminate_prob)) {
-        return radiance_out;
+        return radiance_out * vol_transmittance;
     }
 
     // (4)
@@ -203,10 +208,15 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
     Spectrum incoming_radiance = trace_ray(in_ray);
 
     // (5)
-    radiance_out += incoming_radiance * bsdf_sample.attenuation * cos_theta /
+    radiance_out += incoming_radiance * bsdf_sample.attenuation * cos_theta/
                     (bsdf_sample.pdf * (1.0f - terminate_prob));
 
-    return radiance_out;
+    return radiance_out * vol_transmittance;
+    
+}
+
+void Pathtracer::set_volume_rendering(bool vr) {
+    volume_rendering = vr;
 }
 
 } // namespace PT

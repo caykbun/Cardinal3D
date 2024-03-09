@@ -38,6 +38,8 @@ public:
     float progress() const;
     std::pair<float, float> completion_time() const;
 
+    void set_volume_rendering(bool vr);
+
 private:
     // Internal
     void build_scene(Scene& scene);
@@ -69,6 +71,9 @@ private:
 
     Camera camera;
     size_t out_w, out_h, n_samples, n_area_samples, max_depth;
+
+    // volume rendering
+    bool volume_rendering = true;
 };
 
 } // namespace PT

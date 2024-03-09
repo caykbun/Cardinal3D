@@ -100,6 +100,10 @@ struct Spectrum {
                  std::isnan(g) || std::isnan(b));
     }
 
+    Spectrum exp() const {
+        return Spectrum(std::exp(r), std::exp(g), std::exp(b));
+    }
+
     Vec3 to_vec() const {
         return Vec3(r, g, b);
     }

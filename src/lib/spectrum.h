@@ -83,6 +83,9 @@ struct Spectrum {
     Spectrum operator/(float s) const {
         return Spectrum(r / s, g / s, b / s);
     }
+    Spectrum operator/(Spectrum s) const {
+        return Spectrum(r / s.r, g / s.g, b / s.b);
+    }
 
     bool operator==(Spectrum v) const {
         return r == v.r && g == v.g && b == v.b;

@@ -33,8 +33,11 @@ Vec3 Sphere::Uniform::sample(float& pdf) const {
     // Generate a uniformly random point on the unit sphere (or equivalently, direction)
     // Tip: start with Hemisphere::Uniform
 
-    pdf = 1.0f; // what was the PDF at the chosen direction?
-    return Vec3();
+    float z = 1 - 2 * RNG::unit();
+    float r = sqrt(fmax(0.f, 1 - z * z));
+    float phi = 2 * PI_F * RNG::unit();
+    pdf = 1.0f / (4 * PI_F); // what was the PDF at the chosen direction?
+    return Vec3{r * cos(phi), r * sin(phi), z};
 }
 
 Sphere::Image::Image(const HDR_Image& image) {

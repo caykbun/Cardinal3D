@@ -159,6 +159,10 @@ struct Vec3 {
         return std::sqrt(norm_squared());
     }
 
+    float mean() const {
+        return (x + y + z) / 3.f;
+    }
+
     /// Make sure all components are in the range [min,max) with floating point mod logic
     Vec3 range(float min, float max) const {
         if(!valid()) return Vec3();

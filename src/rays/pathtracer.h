@@ -39,6 +39,7 @@ public:
     std::pair<float, float> completion_time() const;
 
     void set_volume_rendering(bool vr);
+    void set_absorb_and_scatter(float _abs, float _sct);
 
 private:
     // Internal
@@ -74,6 +75,8 @@ private:
 
     // volume rendering
     bool volume_rendering = true;
+    float absorb = 0;
+    float scatter = 0;
 };
 
 } // namespace PT

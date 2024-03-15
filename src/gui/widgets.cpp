@@ -586,6 +586,7 @@ void Widget_Render::begin(Scene& scene, Widget_Camera& cam, Camera& user_cam) {
         ImGui::InputInt("Max Ray Depth", &out_depth, 1, 32);
         ImGui::SliderFloat("Exposure", &exposure, 0.01f, 10.0f, "%.2f", 2.5f);
         ImGui::Checkbox("Volume Rendering", &volume_rendering);
+        ImGui::InputFloat2("Absorption and Scattering", abs_sct);
     } else {
         ImGui::Combo("Samples", (int*)&msaa.samples, GL::Sample_Count_Names, msaa.n_options());
         out_samples = msaa.n_samples();
@@ -778,6 +779,7 @@ bool Widget_Render::UI(Scene& scene, Widget_Camera& cam, Camera& user_cam, std::
                 ray_log.clear();
                 pathtracer.set_sizes(out_w, out_h, out_samples, out_area_samples, out_depth);
                 pathtracer.set_volume_rendering(volume_rendering);
+                pathtracer.set_absorb_and_scatter(abs_sct[0], abs_sct[1]);
                 pathtracer.begin_render(scene, cam.get());
             } else {
                 Renderer::get().save(scene, cam.get(), out_w, out_h, out_samples);

@@ -49,6 +49,7 @@ struct Ray {
     mutable Vec2 dist_bounds = Vec2(0.0f, std::numeric_limits<float>::infinity());
 
     bool from_discrete = false;
+    bool from_volume = false;
 };
 
 inline std::ostream& operator<<(std::ostream& out, Ray r) {

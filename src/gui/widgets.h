@@ -114,6 +114,7 @@ private:
     int out_w, out_h, out_samples = 32, out_area_samples = 8, out_depth = 4;
     float exposure = 1.0f;
     bool volume_rendering = true;
+    float abs_sct[2] = {0.1, 0.1};
 
     bool has_rendered = false;
     bool render_window = false, render_window_focus = false;
